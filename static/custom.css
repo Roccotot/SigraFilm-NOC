@@ -1,1 +1,34 @@
-body { background: #eaf6ea; }
+/* Stile personalizzato per SigraFilm NOC */
+
+/* Navbar verde più evidente */
+.navbar {
+  font-weight: 500;
+  box-shadow: 0 2px 5px rgba(0,0,0,.2);
+}
+
+/* Pulsanti */
+.btn-success {
+  background-color: #198754;
+  border-color: #198754;
+}
+.btn-success:hover {
+  background-color: #146c43;
+  border-color: #146c43;
+}
+
+/* Tabelle */
+.table-success th {
+  background-color: #198754 !important;
+  color: white;
+}
+
+/* Flash messages */
+.alert {
+  margin-top: 10px;
+}
+
+/* Form e card */
+.card {
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0,0,0,.1);
+}
