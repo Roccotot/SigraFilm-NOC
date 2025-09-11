@@ -1,1 +1,3 @@
-# main.py placeholder: contiene il codice Flask (vedi documento)
+from flask import Flask
+
+app = Flask(__name__)
