@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS issues (
 );
 """
 
-@app.before_first_request
 def init_db():
     db = get_db()
     db.executescript(SCHEMA_SQL)
@@ -63,6 +62,11 @@ def init_db():
             ("admin", generate_password_hash("SigraFilm2025"), "admin"),
         )
         db.commit()
+
+# inizializza subito all’avvio dell’app
+with app.app_context():
+    init_db()
+
 
 # ---------------------- Auth utils ----------------------
 
