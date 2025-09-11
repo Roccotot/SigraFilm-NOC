@@ -6,4 +6,8 @@ services:
     startCommand: "gunicorn main:app"
     envVars:
       - key: APP_SECRET
-        value: "cambia-questa-stringa-con-una-lunga-casuale"
+        value: "cambia-questa-stringa-lunga-e-casuale"
+      # DATABASE_URL viene normalmente impostata collegando il DB su Render.
+      # Se vuoi forzarla qui, puoi farlo:
+      # - key: DATABASE_URL
+      #   value: "postgres://user:pass@host:5432/dbname"
