@@ -18,7 +18,34 @@
       </div>
     </div>
   </nav>
-
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Segnala un problema</h5>
+    <form method="post" action="{{ url_for('add_problem') }}">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <input type="text" name="cinema" class="form-control" placeholder="Cinema" required>
+        </div>
+        <div class="col-md-2">
+          <input type="text" name="sala" class="form-control" placeholder="Sala" required>
+        </div>
+        <div class="col-md-2">
+          <input type="text" name="tipo" class="form-control" placeholder="Tipo" required>
+        </div>
+        <div class="col-md-2">
+          <select name="urgenza" class="form-select">
+            <option value="Non urgente">Non urgente</option>
+            <option value="Urgente">Urgente</option>
+            <option value="Critico">Critico</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
   <!-- Contenuto -->
   <div class="container mt-4">
     <h2 class="mb-3">Problemi</h2>
