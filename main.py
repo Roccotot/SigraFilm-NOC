@@ -1,8 +1,9 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime
-from sqlalchemy.orm import sessionmaker, relationship, declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models import Base, User, Issue  # Importa modelli da models.py
 from datetime import datetime
 
 # -----------------------------------------------------------------------------
@@ -19,66 +20,24 @@ DATABASE_URL = os.getenv(
     "postgresql+psycopg://sigrafilm_db_user:password@localhost:5432/sigrafilm_db"
 )
 
-# Se la variabile d’ambiente ha ancora il vecchio formato, correggila
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
-
+# Fix per Render (alcuni env hanno ancora "postgres://")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True)
-    username = Column(String, unique=True, nullable=False)
-    password_hash = Column(String, nullable=False)
-    role = Column(String, nullable=False, default="user")
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    issues = relationship("Issue", back_populates="author")
-
-
-class Issue(Base):
-    __tablename__ = "issues"
-
-    id = Column(Integer, primary_key=True)
-    room = Column(String, nullable=False)
-    cinema = Column(String, nullable=False)
-    kind = Column(String, nullable=False)
-    description = Column(Text, nullable=False)
-    urgency = Column(String, nullable=False)
-    status = Column(String, default="In corso")
-    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, onupdate=datetime.utcnow)
-
-    author = relationship("User", back_populates="issues")
-
 
 # Crea le tabelle se non esistono
 Base.metadata.create_all(bind=engine)
 
-
 # -----------------------------------------------------------------------------
 # UTILITY
 # -----------------------------------------------------------------------------
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 def current_user():
     if "user_id" in session:
         db = SessionLocal()
         return db.query(User).filter(User.id == session["user_id"]).first()
     return None
-
 
 # -----------------------------------------------------------------------------
 # ROUTES
