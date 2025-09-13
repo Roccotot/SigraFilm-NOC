@@ -16,8 +16,13 @@ app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
 # -----------------------------------------------------------------------------
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://sigrafilm_db_user:password@localhost:5432/sigrafilm_db"
+    "postgresql+psycopg://sigrafilm_db_user:password@localhost:5432/sigrafilm_db"
 )
+
+# Se la variabile d’ambiente ha ancora il vecchio formato, correggila
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
