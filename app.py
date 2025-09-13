@@ -9,6 +9,29 @@ app.secret_key = "sigrafilm-secret"
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://sigrafilm_db_user:aTaxodWqw29ViddgvGpzT21EGjME4AHM@dpg-d31i59m3jp1c73fu9efg-a.frankfurt-postgres.render.com/sigrafilm_db"
 db.init_app(app)
 
+@app.route("/add_problem", methods=["POST"])
+def add_problem():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    cinema = request.form["cinema"]
+    sala = request.form["sala"]
+    tipo = request.form["tipo"]
+    urgenza = request.form["urgenza"]
+
+    new_problem = Problem(
+        cinema=cinema,
+        sala=sala,
+        tipo=tipo,
+        urgenza=urgenza,
+        stato="Aperto",
+        autore=User.query.get(session["user_id"]).username
+    )
+    db.session.add(new_problem)
+    db.session.commit()
+
+    return redirect(url_for("dashboard"))
+
 # Inizializzazione tabelle e admin all'avvio
 with app.app_context():
     db.create_all()
