@@ -7,40 +7,6 @@
 </head>
 <body>
   <!-- Navbar -->
-  <thead class="table-dark">
-  <tr>
-    <th>ID</th>
-    <th>Cinema</th>
-    <th>Sala</th>
-    <th>Tipo</th>
-    <th>Urgenza</th>
-    <th>Stato</th>
-    <th>Autore</th>
-    {% if session.get("role") == "admin" %}
-      <th>Azioni</th>
-    {% endif %}
-  </tr>
-</thead>
-<tbody>
-  {% for p in problems %}
-  <tr>
-    <td>{{ p.id }}</td>
-    <td>{{ p.cinema }}</td>
-    <td>{{ p.sala }}</td>
-    <td>{{ p.tipo }}</td>
-    <td>{{ p.urgenza }}</td>
-    <td>{{ p.stato }}</td>
-    <td>{{ p.autore }}</td>
-    {% if session.get("role") == "admin" %}
-      <td>
-        <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏ Modifica</a>
-        <a href="{{ url_for('delete_problem', problem_id=p.id) }}" class="btn btn-sm btn-danger">🗑 Elimina</a>
-      </td>
-    {% endif %}
-  </tr>
-  {% endfor %}
-</tbody>
-
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
       <a class="navbar-brand" href="#">SigraFilm NOC</a>
@@ -52,36 +18,37 @@
       </div>
     </div>
   </nav>
-<div class="card shadow-sm mb-4">
-  <div class="card-body">
-    <h5 class="card-title">Segnala un problema</h5>
-    <form method="post" action="{{ url_for('add_problem') }}">
-      <div class="row g-3">
-        <div class="col-md-3">
-          <input type="text" name="cinema" class="form-control" placeholder="Cinema" required>
-        </div>
-        <div class="col-md-2">
-          <input type="text" name="sala" class="form-control" placeholder="Sala" required>
-        </div>
-        <div class="col-md-2">
-          <input type="text" name="tipo" class="form-control" placeholder="Tipo" required>
-        </div>
-        <div class="col-md-2">
-          <select name="urgenza" class="form-select">
-            <option value="Non urgente">Non urgente</option>
-            <option value="Urgente">Urgente</option>
-            <option value="Critico">Critico</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
-        </div>
-      </div>
-    </form>
-  </div>
-</div>
-  <!-- Contenuto -->
+
   <div class="container mt-4">
+
+    <!-- Form segnalazione problema -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <h5 class="card-title">Segnala un problema</h5>
+        <form method="post" action="{{ url_for('add_problem') }}">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <input type="text" name="sala" class="form-control" placeholder="Sala" required>
+            </div>
+            <div class="col-md-3">
+              <input type="text" name="tipo" class="form-control" placeholder="Tipo" required>
+            </div>
+            <div class="col-md-3">
+              <select name="urgenza" class="form-select">
+                <option value="Non urgente">Non urgente</option>
+                <option value="Urgente">Urgente</option>
+                <option value="Critico">Critico</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tabella problemi -->
     <h2 class="mb-3">Problemi</h2>
 
     {% if problems %}
@@ -96,6 +63,9 @@
               <th>Urgenza</th>
               <th>Stato</th>
               <th>Autore</th>
+              {% if session.get("role") == "admin" %}
+                <th>Azioni</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
@@ -108,6 +78,12 @@
               <td>{{ p.urgenza }}</td>
               <td>{{ p.stato }}</td>
               <td>{{ p.autore }}</td>
+              {% if session.get("role") == "admin" %}
+                <td>
+                  <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
+                  <a href="{{ url_for('delete_problem', problem_id=p.id) }}" class="btn btn-sm btn-danger">🗑</a>
+                </td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
