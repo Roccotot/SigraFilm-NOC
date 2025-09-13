@@ -9,11 +9,15 @@ app.secret_key = "sigrafilm-secret"
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://sigrafilm_db_user:aTaxodWqw29ViddgvGpzT21EGjME4AHM@dpg-d31i59m3jp1c73fu9efg-a.frankfurt-postgres.render.com/sigrafilm_db"
 db.init_app(app)
 
-@app.before_first_request
-def create_tables():
+# Inizializzazione tabelle e admin all'avvio
+with app.app_context():
     db.create_all()
     if not User.query.filter_by(username="admin").first():
-        admin = User(username="admin", password_hash=generate_password_hash("SigraFilm2025"), role="admin")
+        admin = User(
+            username="admin",
+            password_hash=generate_password_hash("SigraFilm2025"),
+            role="admin"
+        )
         db.session.add(admin)
         db.session.commit()
 
