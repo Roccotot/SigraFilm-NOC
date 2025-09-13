@@ -11,6 +11,9 @@
     <div class="container-fluid">
       <a class="navbar-brand" href="#">SigraFilm NOC</a>
       <div class="d-flex">
+        {% if session.get("role") == "admin" %}
+          <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light me-2">Gestione Utenti</a>
+        {% endif %}
         <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
       </div>
     </div>
@@ -19,28 +22,39 @@
   <!-- Contenuto -->
   <div class="container mt-4">
     <h2 class="mb-3">Problemi</h2>
-    <div class="table-responsive">
-      <table class="table table-striped table-hover shadow-sm">
-        <thead class="table-dark">
-          <tr>
-            <th>ID</th><th>Cinema</th><th>Sala</th><th>Tipo</th><th>Urgenza</th><th>Stato</th><th>Autore</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in problems %}
-          <tr>
-            <td>{{p.id}}</td>
-            <td>{{p.cinema}}</td>
-            <td>{{p.sala}}</td>
-            <td>{{p.tipo}}</td>
-            <td>{{p.urgenza}}</td>
-            <td>{{p.stato}}</td>
-            <td>{{p.autore}}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+
+    {% if problems %}
+      <div class="table-responsive">
+        <table class="table table-striped table-hover shadow-sm">
+          <thead class="table-dark">
+            <tr>
+              <th>ID</th>
+              <th>Cinema</th>
+              <th>Sala</th>
+              <th>Tipo</th>
+              <th>Urgenza</th>
+              <th>Stato</th>
+              <th>Autore</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in problems %}
+            <tr>
+              <td>{{ p.id }}</td>
+              <td>{{ p.cinema }}</td>
+              <td>{{ p.sala }}</td>
+              <td>{{ p.tipo }}</td>
+              <td>{{ p.urgenza }}</td>
+              <td>{{ p.stato }}</td>
+              <td>{{ p.autore }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info">Nessun problema registrato</div>
+    {% endif %}
   </div>
 </body>
 </html>
