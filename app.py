@@ -5,34 +5,11 @@ from models import db, User, Problem
 app = Flask(__name__)
 app.secret_key = "sigrafilm-secret"
 
-# Connessione DB - su Render puoi sovrascrivere con la variabile d'ambiente DATABASE_URL
+# Connessione DB - su Render puoi sovrascrivere con DATABASE_URL
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://sigrafilm_db_user:aTaxodWqw29ViddgvGpzT21EGjME4AHM@dpg-d31i59m3jp1c73fu9efg-a.frankfurt-postgres.render.com/sigrafilm_db"
 db.init_app(app)
 
-@app.route("/add_problem", methods=["POST"])
-def add_problem():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
-    cinema = request.form["cinema"]
-    sala = request.form["sala"]
-    tipo = request.form["tipo"]
-    urgenza = request.form["urgenza"]
-
-    new_problem = Problem(
-        cinema=cinema,
-        sala=sala,
-        tipo=tipo,
-        urgenza=urgenza,
-        stato="Aperto",
-        autore=User.query.get(session["user_id"]).username
-    )
-    db.session.add(new_problem)
-    db.session.commit()
-
-    return redirect(url_for("dashboard"))
-
-# Inizializzazione tabelle e admin all'avvio
+# Inizializzazione tabelle e admin
 with app.app_context():
     db.create_all()
     if not User.query.filter_by(username="admin").first():
@@ -43,6 +20,8 @@ with app.app_context():
         )
         db.session.add(admin)
         db.session.commit()
+
+# ---------------- ROUTES ---------------- #
 
 @app.route("/")
 def index():
@@ -71,7 +50,6 @@ def dashboard():
         return redirect(url_for("login"))
 
     user = User.query.get(session["user_id"])
-
     if user.role == "admin":
         problems = Problem.query.all()
     else:
@@ -79,24 +57,43 @@ def dashboard():
 
     return render_template("dashboard.html", problems=problems)
 
+@app.route("/add_problem", methods=["POST"])
+def add_problem():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    user = User.query.get(session["user_id"])
+
+    sala = request.form.get("sala")
+    tipo = request.form.get("tipo")
+    urgenza = request.form.get("urgenza")
+
+    new_problem = Problem(
+        cinema=user.username,   # 👈 usiamo username come "cinema"
+        sala=sala,
+        tipo=tipo,
+        urgenza=urgenza,
+        stato="Aperto",
+        autore=user.username
+    )
+    db.session.add(new_problem)
+    db.session.commit()
+    return redirect(url_for("dashboard"))
+
 @app.route("/delete_problem/<int:problem_id>")
 def delete_problem(problem_id):
     if session.get("role") != "admin":
         return "Accesso negato", 403
-
     problem = Problem.query.get_or_404(problem_id)
     db.session.delete(problem)
     db.session.commit()
     return redirect(url_for("dashboard"))
 
-
 @app.route("/edit_problem/<int:problem_id>", methods=["GET", "POST"])
 def edit_problem(problem_id):
     if session.get("role") != "admin":
         return "Accesso negato", 403
-
     problem = Problem.query.get_or_404(problem_id)
-
     if request.method == "POST":
         problem.sala = request.form["sala"]
         problem.tipo = request.form["tipo"]
@@ -104,9 +101,7 @@ def edit_problem(problem_id):
         problem.stato = request.form["stato"]
         db.session.commit()
         return redirect(url_for("dashboard"))
-
     return render_template("edit_problem.html", problem=problem)
-
 
 @app.route("/admin/users", methods=["GET", "POST"])
 def admin_users():
