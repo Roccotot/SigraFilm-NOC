@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><title>Dashboard</title></head>
+<body>
+  <h2>Problemi</h2>
+  <table border="1">
+    <tr><th>ID</th><th>Cinema</th><th>Sala</th><th>Tipo</th><th>Urgenza</th><th>Stato</th><th>Autore</th></tr>
+    {% for p in problems %}
+    <tr>
+      <td>{{p.id}}</td>
+      <td>{{p.cinema}}</td>
+      <td>{{p.sala}}</td>
+      <td>{{p.tipo}}</td>
+      <td>{{p.urgenza}}</td>
+      <td>{{p.stato}}</td>
+      <td>{{p.autore}}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <a href="{{url_for('logout')}}">Logout</a>
+</body>
+</html>

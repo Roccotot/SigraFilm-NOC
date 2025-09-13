@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head><title>Gestione Utenti</title></head>
+<body>
+  <h2>Gestione Utenti</h2>
+  <form method="post">
+    <input type="text" name="username" placeholder="Nuovo username">
+    <input type="password" name="password" placeholder="Password">
+    <button type="submit">Crea</button>
+  </form>
+  <table border="1">
+    <tr><th>ID</th><th>Username</th><th>Ruolo</th></tr>
+    {% for u in users %}
+    <tr><td>{{u.id}}</td><td>{{u.username}}</td><td>{{u.role}}</td></tr>
+    {% endfor %}
+  </table>
+  <a href="{{url_for('dashboard')}}">← Torna</a>
+</body>
+</html>
