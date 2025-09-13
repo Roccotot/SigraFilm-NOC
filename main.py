@@ -24,11 +24,16 @@ DATABASE_URL = os.getenv(
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Fix aggiuntivo per env che forzano psycopg2
+if DATABASE_URL.startswith("postgresql+psycopg2://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
 
-# Crea le tabelle se non esistono
-Base.metadata.create_all(bind=engine)
+# Creazione engine SQLAlchemy
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+
+# Sessione e base per i modelli
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
 # -----------------------------------------------------------------------------
 # UTILITY
