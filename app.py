@@ -5,7 +5,7 @@ from models import db, User, Problem
 app = Flask(__name__)
 app.secret_key = "sigrafilm-secret"
 
-# Connessione DB
+# Connessione DB - su Render puoi sovrascrivere con la variabile d'ambiente DATABASE_URL
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://sigrafilm_db_user:aTaxodWqw29ViddgvGpzT21EGjME4AHM@dpg-d31i59m3jp1c73fu9efg-a.frankfurt-postgres.render.com/sigrafilm_db"
 db.init_app(app)
 
@@ -59,4 +59,4 @@ def admin_users():
     return render_template("users.html", users=users)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
