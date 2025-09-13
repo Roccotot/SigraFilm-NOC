@@ -1,151 +1,153 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session as flask_session
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, scoped_session
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import Base, User, Issue
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy.orm import sessionmaker, relationship, declarative_base
+from datetime import datetime
 
-# Flask app
+# -----------------------------------------------------------------------------
+# CONFIGURAZIONE APP
+# -----------------------------------------------------------------------------
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "super-secret-key")
+app.secret_key = os.getenv("SECRET_KEY", "supersecretkey")
 
-# DB URL da Render (variabile d’ambiente consigliata)
+# -----------------------------------------------------------------------------
+# DATABASE
+# -----------------------------------------------------------------------------
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://sigrafilm_db_user:aTaxodWqw29ViddgvGpzT21EGjME4AHM@dpg-d31i59m3jp1c73fu9efg-a.frankfurt-postgres.render.com/sigrafilm_db"
+    "postgresql+psycopg2://sigrafilm_db_user:password@localhost:5432/sigrafilm_db"
 )
 
-# Engine SQLAlchemy
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
-SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="user")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    issues = relationship("Issue", back_populates="author")
+
+
+class Issue(Base):
+    __tablename__ = "issues"
+
+    id = Column(Integer, primary_key=True)
+    room = Column(String, nullable=False)
+    cinema = Column(String, nullable=False)
+    kind = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    urgency = Column(String, nullable=False)
+    status = Column(String, default="In corso")
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+
+    author = relationship("User", back_populates="issues")
+
 
 # Crea le tabelle se non esistono
-with engine.begin() as conn:
-    Base.metadata.create_all(bind=conn)
+Base.metadata.create_all(bind=engine)
 
-# ------------------- ROUTES -------------------
 
+# -----------------------------------------------------------------------------
+# UTILITY
+# -----------------------------------------------------------------------------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def current_user():
+    if "user_id" in session:
+        db = SessionLocal()
+        return db.query(User).filter(User.id == session["user_id"]).first()
+    return None
+
+
+# -----------------------------------------------------------------------------
+# ROUTES
+# -----------------------------------------------------------------------------
 @app.route("/")
-def home():
-    if "user_id" not in flask_session:
-        return redirect(url_for("login"))
-    return redirect(url_for("dashboard"))
+def index():
+    if "user_id" in session:
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("login"))
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    db = SessionLocal()
     if request.method == "POST":
-        db = SessionLocal()
         username = request.form["username"]
         password = request.form["password"]
 
-        user = db.query(User).filter_by(username=username).first()
-        if user and check_password_hash(user.password_hash, password):
-            flask_session["user_id"] = user.id
-            flask_session["role"] = user.role
-            db.close()
+        # Admin "hardcoded"
+        if username == "admin" and password == "SigraFilm2025":
+            session["user_id"] = -1
+            session["role"] = "admin"
             return redirect(url_for("dashboard"))
 
-        db.close()
-        return "Credenziali non valide", 401
+        user = db.query(User).filter_by(username=username).first()
+        if user and check_password_hash(user.password_hash, password):
+            session["user_id"] = user.id
+            session["role"] = user.role
+            return redirect(url_for("dashboard"))
+
+        flash("Credenziali non valide", "danger")
 
     return render_template("login.html")
 
+
 @app.route("/logout")
 def logout():
-    flask_session.clear()
+    session.clear()
     return redirect(url_for("login"))
+
 
 @app.route("/dashboard")
 def dashboard():
-    if "user_id" not in flask_session:
-        return redirect(url_for("login"))
-
     db = SessionLocal()
-    issues = db.query(Issue).all()
-    db.close()
-    return render_template("dashboard.html", issues=issues)
+    if session.get("role") == "admin":
+        issues = db.query(Issue).all()
+    else:
+        issues = db.query(Issue).filter_by(author_id=session.get("user_id")).all()
+    return render_template("dashboard.html", issues=issues, user=current_user())
 
-# ------------------- ADMIN -------------------
 
-@app.route("/admin/users")
-def admin_users():
-    if flask_session.get("role") != "admin":
-        return "Accesso negato", 403
-
+@app.route("/issues/new", methods=["GET", "POST"])
+def new_issue():
     db = SessionLocal()
-    users = db.query(User).all()
-    db.close()
-    return render_template("admin_users.html", users=users)
-
-@app.route("/admin/users/create", methods=["POST"])
-def create_user():
-    if flask_session.get("role") != "admin":
-        return "Accesso negato", 403
-
-    db = SessionLocal()
-    username = request.form["username"]
-    password = request.form["password"]
-    role = request.form["role"]
-
-    new_user = User(
-        username=username,
-        password_hash=generate_password_hash(password),
-        role=role,
-    )
-    db.add(new_user)
-    db.commit()
-    db.close()
-    return redirect(url_for("admin_users"))
-
-@app.route("/admin/users/<int:user_id>/edit", methods=["GET", "POST"])
-def edit_user(user_id):
-    if flask_session.get("role") != "admin":
-        return "Accesso negato", 403
-
-    db = SessionLocal()
-    user = db.query(User).filter_by(id=user_id).first()
-
     if request.method == "POST":
-        user.username = request.form["username"]
-        if request.form["password"]:
-            user.password_hash = generate_password_hash(request.form["password"])
-        user.role = request.form["role"]
+        issue = Issue(
+            room=request.form["room"],
+            cinema=request.form["cinema"],
+            kind=request.form["kind"],
+            description=request.form["description"],
+            urgency=request.form["urgency"],
+            author_id=session.get("user_id"),
+        )
+        db.add(issue)
         db.commit()
-        db.close()
-        return redirect(url_for("admin_users"))
+        flash("Problema aggiunto!", "success")
+        return redirect(url_for("dashboard"))
+    return render_template("edit_issue.html")
 
-    db.close()
-    return render_template("edit_user.html", user=user)
-
-# ------------------- ISSUES -------------------
-
-@app.route("/issues/create", methods=["POST"])
-def create_issue():
-    if "user_id" not in flask_session:
-        return redirect(url_for("login"))
-
-    db = SessionLocal()
-    new_issue = Issue(
-        room=request.form["room"],
-        cinema=request.form["cinema"],
-        kind=request.form["kind"],
-        description=request.form["description"],
-        urgency=request.form["urgency"],
-        author_id=flask_session["user_id"],
-    )
-    db.add(new_issue)
-    db.commit()
-    db.close()
-    return redirect(url_for("dashboard"))
 
 @app.route("/issues/<int:issue_id>/edit", methods=["GET", "POST"])
 def edit_issue(issue_id):
-    if "user_id" not in flask_session:
-        return redirect(url_for("login"))
-
     db = SessionLocal()
-    issue = db.query(Issue).filter_by(id=issue_id).first()
-
+    issue = db.query(Issue).get(issue_id)
     if request.method == "POST":
         issue.room = request.form["room"]
         issue.cinema = request.form["cinema"]
@@ -154,12 +156,81 @@ def edit_issue(issue_id):
         issue.urgency = request.form["urgency"]
         issue.status = request.form["status"]
         db.commit()
-        db.close()
+        flash("Problema aggiornato!", "success")
         return redirect(url_for("dashboard"))
-
-    db.close()
     return render_template("edit_issue.html", issue=issue)
 
-# ------------------- START -------------------
+
+@app.route("/issues/<int:issue_id>/delete")
+def delete_issue(issue_id):
+    db = SessionLocal()
+    issue = db.query(Issue).get(issue_id)
+    if issue:
+        db.delete(issue)
+        db.commit()
+        flash("Problema eliminato!", "success")
+    return redirect(url_for("dashboard"))
+
+
+# ---------------------- ADMIN: GESTIONE UTENTI ----------------------
+@app.route("/admin/users")
+def admin_users():
+    if session.get("role") != "admin":
+        return redirect(url_for("dashboard"))
+    db = SessionLocal()
+    users = db.query(User).all()
+    return render_template("admin_users.html", users=users)
+
+
+@app.route("/admin/users/new", methods=["GET", "POST"])
+def new_user():
+    if session.get("role") != "admin":
+        return redirect(url_for("dashboard"))
+    db = SessionLocal()
+    if request.method == "POST":
+        username = request.form["username"]
+        password = generate_password_hash(request.form["password"])
+        role = request.form["role"]
+        user = User(username=username, password_hash=password, role=role)
+        db.add(user)
+        db.commit()
+        flash("Utente aggiunto!", "success")
+        return redirect(url_for("admin_users"))
+    return render_template("edit_user.html")
+
+
+@app.route("/admin/users/<int:user_id>/edit", methods=["GET", "POST"])
+def edit_user(user_id):
+    if session.get("role") != "admin":
+        return redirect(url_for("dashboard"))
+    db = SessionLocal()
+    user = db.query(User).get(user_id)
+    if request.method == "POST":
+        user.username = request.form["username"]
+        if request.form["password"]:
+            user.password_hash = generate_password_hash(request.form["password"])
+        user.role = request.form["role"]
+        db.commit()
+        flash("Utente aggiornato!", "success")
+        return redirect(url_for("admin_users"))
+    return render_template("edit_user.html", user=user)
+
+
+@app.route("/admin/users/<int:user_id>/delete")
+def delete_user(user_id):
+    if session.get("role") != "admin":
+        return redirect(url_for("dashboard"))
+    db = SessionLocal()
+    user = db.query(User).get(user_id)
+    if user:
+        db.delete(user)
+        db.commit()
+        flash("Utente eliminato!", "success")
+    return redirect(url_for("admin_users"))
+
+
+# -----------------------------------------------------------------------------
+# AVVIO
+# -----------------------------------------------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
