@@ -69,7 +69,14 @@ def logout():
 def dashboard():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    problems = Problem.query.all()
+
+    user = User.query.get(session["user_id"])
+
+    if user.role == "admin":
+        problems = Problem.query.all()
+    else:
+        problems = Problem.query.filter_by(autore=user.username).all()
+
     return render_template("dashboard.html", problems=problems)
 
 @app.route("/admin/users", methods=["GET", "POST"])
