@@ -79,6 +79,35 @@ def dashboard():
 
     return render_template("dashboard.html", problems=problems)
 
+@app.route("/delete_problem/<int:problem_id>")
+def delete_problem(problem_id):
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+
+    problem = Problem.query.get_or_404(problem_id)
+    db.session.delete(problem)
+    db.session.commit()
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/edit_problem/<int:problem_id>", methods=["GET", "POST"])
+def edit_problem(problem_id):
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+
+    problem = Problem.query.get_or_404(problem_id)
+
+    if request.method == "POST":
+        problem.sala = request.form["sala"]
+        problem.tipo = request.form["tipo"]
+        problem.urgenza = request.form["urgenza"]
+        problem.stato = request.form["stato"]
+        db.session.commit()
+        return redirect(url_for("dashboard"))
+
+    return render_template("edit_problem.html", problem=problem)
+
+
 @app.route("/admin/users", methods=["GET", "POST"])
 def admin_users():
     if session.get("role") != "admin":
