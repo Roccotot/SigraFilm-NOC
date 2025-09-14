@@ -1,5 +1,6 @@
 # app.py
 import os
+import secrets
 from datetime import datetime
 from functools import wraps
 
@@ -16,19 +17,18 @@ from models import db, User, Problem
 def create_app():
     app = Flask(__name__)
 
-    # Config base
+    # ------------------- Config -------------------
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///sigra.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-    # Init DB
+    # ------------------- DB init -------------------
     db.init_app(app)
     with app.app_context():
         db.create_all()
 
-    # ------------------- Helper: decorators -------------------
-
+    # ------------------- Helpers -------------------
     def login_required(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
@@ -45,8 +45,7 @@ def create_app():
             return f(*args, **kwargs)
         return wrapper
 
-    # ------------------- CSRF minimale per form sensibili -------------------
-    import secrets
+    # CSRF minimale per form sensibili
     def _csrf_token():
         token = session.get("_csrf_token")
         if not token:
@@ -59,7 +58,6 @@ def create_app():
         return {"csrf_token": _csrf_token}
 
     # ------------------- Auth -------------------
-
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
@@ -71,14 +69,12 @@ def create_app():
                 flash("Credenziali non valide.", "danger")
                 return render_template("login.html")
 
-            # Login ok
             session["user_id"] = user.id
             session["username"] = user.username
             session["role"] = user.role
             flash(f"Benvenuto, {user.username}!", "success")
             return redirect(url_for("dashboard"))
 
-        # GET
         return render_template("login.html")
 
     @app.route("/logout")
@@ -88,7 +84,6 @@ def create_app():
         return redirect(url_for("login"))
 
     # ------------------- Dashboard -------------------
-
     @app.route("/")
     @app.route("/dashboard")
     @login_required
@@ -97,12 +92,12 @@ def create_app():
         return render_template("dashboard.html", problems=problems)
 
     # ------------------- CRUD Problemi -------------------
-
     @app.route("/add_problem", methods=["POST"])
     @login_required
     def add_problem():
         apertura_str = request.form.get("apertura")
         try:
+            # datetime-local -> stringa senza timezone (naive)
             apertura = datetime.fromisoformat(apertura_str) if apertura_str else datetime.utcnow()
         except Exception:
             apertura = datetime.utcnow()
@@ -119,7 +114,7 @@ def create_app():
         autore = current_user.username if current_user else "sconosciuto"
 
         problem = Problem(
-            cinema="",  # legacy
+            cinema="",  # legacy, non più usato in UI
             sala=sala,
             tipo=tipo,
             urgenza=urgenza,
@@ -175,7 +170,6 @@ def create_app():
         return redirect(url_for("dashboard"))
 
     # ------------------- Admin utenti -------------------
-
     @app.route("/admin/users", endpoint="admin_users", methods=["GET", "POST"])
     @login_required
     @admin_required
@@ -209,11 +203,11 @@ def create_app():
         return render_template("admin_users.html", users=users)
 
     # ------------------- Dangerous wipe (opzionale, protetto) -------------------
-
     @app.route("/admin/wipe", methods=["POST"])
     @login_required
     @admin_required
     def wipe_db():
+        # Abilita esplicitamente: ENABLE_DANGEROUS_WIPE=1
         if os.environ.get("ENABLE_DANGEROUS_WIPE") != "1":
             abort(403)
 
@@ -226,6 +220,7 @@ def create_app():
             flash("Frase di conferma errata. Digita: CANCELLA TUTTO", "danger")
             return redirect(url_for("dashboard"))
 
+        # TRUNCATE tutte le tabelle dello schema 'public' e reset ID
         meta = db.metadata
         meta.reflect(bind=db.engine)
         tables = [t.name for t in meta.sorted_tables]
@@ -237,13 +232,42 @@ def create_app():
         flash("Database svuotato: tabelle vuote e ID azzerati.", "warning")
         return redirect(url_for("dashboard"))
 
+    # ------------------- Init/Reset admin -------------------
+    @app.route("/init-admin")
+    def init_admin():
+        """
+        Crea l'utente admin se non esiste, oppure aggiorna la password.
+        Richiede ALLOW_INIT_ADMIN=1 (rimuovere subito dopo l'uso).
+        Username/password di default: admin / SigraFilm2025.
+        Sovrascrivibili con INIT_ADMIN_USER / INIT_ADMIN_PASS.
+        """
+        if os.environ.get("ALLOW_INIT_ADMIN") != "1":
+            return "Bloccato: manca ALLOW_INIT_ADMIN=1", 403
+
+        username = os.environ.get("INIT_ADMIN_USER", "admin")
+        password = os.environ.get("INIT_ADMIN_PASS", "SigraFilm2025")
+
+        user = User.query.filter_by(username=username).first()
+        if user:
+            user.password_hash = generate_password_hash(password)
+            msg = f"Password aggiornata per '{username}'."
+        else:
+            user = User(username=username,
+                        password_hash=generate_password_hash(password),
+                        role="admin")
+            db.session.add(user)
+            msg = f"Creato admin '{username}'."
+
+        db.session.commit()
+        flash(msg, "success")
+        return redirect(url_for("login"))
+
     return app
 
 
-# ✅ Istanza globale per Gunicorn (importa: app:app)
+# Istanza globale per Gunicorn (app:app)
 app = create_app()
 
-# Avvio locale solo quando esegui python app.py
+# Avvio locale
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    port = int(os.environ.get("POR
