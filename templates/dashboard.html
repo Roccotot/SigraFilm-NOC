@@ -5,6 +5,13 @@
   <title>Dashboard - SigraFilm</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable .indicator { font-size: .8rem; opacity: .65; margin-left: .25rem; }
+    th[aria-sort="ascending"]  .indicator::after { content: "▲"; }
+    th[aria-sort="descending"] .indicator::after { content: "▼"; }
+    th[aria-sort="none"]       .indicator::after { content: "↕"; }
+  </style>
 </head>
 <body>
 
@@ -12,7 +19,7 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
       <!-- Logo mobile -->
-      <a class="navbar-brand mx-auto d-lg-none" href="https://sigrafilm.com/" target="_blank">
+      <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
         <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
       </a>
 
@@ -24,7 +31,7 @@
       <!-- Contenuto navbar -->
       <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
         <!-- Logo desktop -->
-        <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
+        <a class="navbar-brand d-none d-lg-block mx-auto" href="#">
           <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
         </a>
 
@@ -46,9 +53,12 @@
         <h5 class="card-title">Segnala un problema</h5>
         <form method="post" action="{{ url_for('add_problem') }}">
           <div class="row g-3">
+            <!-- NUOVO: Data e ora apertura (al posto di "Cinema") -->
             <div class="col-12 col-md-3">
-              <input type="text" name="cinema" class="form-control" placeholder="Cinema" required>
+              <label class="form-label small text-muted mb-1">Data e ora apertura</label>
+              <input type="datetime-local" name="apertura" class="form-control" required>
             </div>
+
             <div class="col-12 col-md-2">
               <input type="text" name="sala" class="form-control" placeholder="Sala" required>
             </div>
@@ -74,19 +84,18 @@
     <h2 class="mb-3">Problemi</h2>
     {% if problems %}
       <div class="table-responsive">
-        <table class="table table-striped table-hover shadow-sm">
+        <table class="table table-striped table-hover shadow-sm align-middle" id="problemsTable">
           <thead class="table-dark">
             <tr>
-              <th>ID</th>
-              <th>Cinema</th>
-              <th>Sala</th>
-              <th>Tipo</th>
-              <th>Urgenza</th>
-              <th>Stato</th>
-              <th>Autore</th>
-              <th>Data</th>
+              <th scope="col" data-type="number"   class="sortable" aria-sort="none">ID <span class="indicator" aria-hidden="true"></span></th>
+              <th scope="col" data-type="date"     class="sortable" aria-sort="none">Apertura <span class="indicator" aria-hidden="true"></span></th>
+              <th scope="col" data-type="text"     class="sortable" aria-sort="none">Sala <span class="indicator" aria-hidden="true"></span></th>
+              <th scope="col" data-type="text"     class="sortable" aria-sort="none">Tipo <span class="indicator" aria-hidden="true"></span></th>
+              <th scope="col" data-type="priority" class="sortable" aria-sort="none">Urgenza <span class="indicator" aria-hidden="true"></span></th>
+              <th scope="col" data-type="text"     class="sortable" aria-sort="none">Stato <span class="indicator" aria-hidden="true"></span></th>
+              <th scope="col" data-type="text"     class="sortable" aria-sort="none">Autore <span class="indicator" aria-hidden="true"></span></th>
               {% if session.get("role") == "admin" %}
-                <th>Azioni</th>
+                <th scope="col" class="no-sort">Azioni</th>
               {% endif %}
             </tr>
           </thead>
@@ -99,13 +108,18 @@
               {% endif %}
             ">
               <td>{{ p.id }}</td>
-              <td>{{ p.cinema }}</td>
+
+              <!-- Per l'ordinamento corretto, metto un valore ISO in data-sort -->
+              <td data-sort="{{ (p.apertura.isoformat() if p.apertura else '') }}">
+                {{ p.apertura.strftime('%d/%m/%Y %H:%M') if p.apertura else '-' }}
+              </td>
+
               <td>{{ p.sala }}</td>
               <td>{{ p.tipo }}</td>
               <td>{{ p.urgenza }}</td>
               <td>{{ p.stato }}</td>
               <td>{{ p.autore }}</td>
-              <td>{{ p.data_creazione.strftime('%d/%m/%Y %H:%M') }}</td>
+
               {% if session.get("role") == "admin" %}
               <td class="text-nowrap">
                 <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
@@ -125,5 +139,85 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // Precompila il datetime-local con l'ora locale attuale se vuoto
+    document.addEventListener('DOMContentLoaded', () => {
+      const dt = document.querySelector('input[name="apertura"]');
+      if (dt && !dt.value) {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        dt.value = now.toISOString().slice(0, 16);
+      }
+    });
+
+    // Ordinamento tabella al click sulle intestazioni
+    (function() {
+      const table = document.getElementById('problemsTable');
+      if (!table) return;
+
+      const getCell = (row, idx) => row.children[idx];
+
+      const priorityRank = {
+        "Critico": 3,
+        "Urgente": 2,
+        "Non urgente": 1
+      };
+
+      const extractors = {
+        number: (cell) => {
+          const n = parseFloat((cell.dataset.sort || cell.textContent).replace(',', '.'));
+          return isNaN(n) ? -Infinity : n;
+        },
+        date: (cell) => {
+          const v = cell.dataset.sort || cell.textContent;
+          const t = Date.parse(v);
+          return isNaN(t) ? -Infinity : t;
+        },
+        priority: (cell) => priorityRank[(cell.textContent || '').trim()] || 0,
+        text: (cell) => (cell.textContent || '').trim().toLocaleLowerCase('it')
+      };
+
+      // Inizializza headers
+      const headers = Array.from(table.querySelectorAll('thead th')).filter(th => !th.classList.contains('no-sort'));
+      headers.forEach((th, idx) => {
+        th.classList.add('sortable');
+        if (!th.hasAttribute('aria-sort')) th.setAttribute('aria-sort', 'none');
+        if (!th.querySelector('.indicator')) {
+          const sp = document.createElement('span');
+          sp.className = 'indicator';
+          sp.setAttribute('aria-hidden', 'true');
+          th.appendChild(sp);
+        }
+
+        th.addEventListener('click', () => {
+          const type = th.dataset.type || 'text';
+          const current = th.getAttribute('aria-sort');
+          const nextOrder = current === 'ascending' ? 'descending' : 'ascending';
+
+          // reset altri header
+          headers.forEach(h => h.setAttribute('aria-sort', h === th ? nextOrder : 'none'));
+
+          const tbody = table.tBodies[0];
+          const rows = Array.from(tbody.rows).map((row, originalIndex) => ({ row, originalIndex }));
+
+          const getKey = (r) => extractors[type](getCell(r.row, idx));
+
+          rows.sort((a, b) => {
+            const ka = getKey(a), kb = getKey(b);
+            if (ka < kb) return nextOrder === 'ascending' ? -1 : 1;
+            if (ka > kb) return nextOrder === 'ascending' ? 1 : -1;
+            // sort stabile
+            return a.originalIndex - b.originalIndex;
+          });
+
+          // riappendi in nuovo ordine
+          const frag = document.createDocumentFragment();
+          rows.forEach(({row}) => frag.appendChild(row));
+          tbody.appendChild(frag);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
