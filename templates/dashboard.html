@@ -12,10 +12,9 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
       <!-- Logo mobile -->
-      <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
-  <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
-</a>
-
+      <a class="navbar-brand mx-auto d-lg-none" href="https://sigrafilm.com/" target="_blank">
+        <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
+      </a>
 
       <!-- Bottone hamburger -->
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
@@ -25,7 +24,7 @@
       <!-- Contenuto navbar -->
       <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
         <!-- Logo desktop -->
-        <a class="navbar-brand d-none d-lg-block mx-auto" href="#">
+        <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
           <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
         </a>
 
@@ -85,6 +84,7 @@
               <th>Urgenza</th>
               <th>Stato</th>
               <th>Autore</th>
+              <th>Data</th>
               {% if session.get("role") == "admin" %}
                 <th>Azioni</th>
               {% endif %}
@@ -105,6 +105,7 @@
               <td>{{ p.urgenza }}</td>
               <td>{{ p.stato }}</td>
               <td>{{ p.autore }}</td>
+              <td>{{ p.data_creazione.strftime('%d/%m/%Y %H:%M') }}</td>
               {% if session.get("role") == "admin" %}
               <td class="text-nowrap">
                 <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
