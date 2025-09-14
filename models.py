@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -20,11 +21,11 @@ class Problem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cinema = db.Column(db.String(100), nullable=False)
     sala = db.Column(db.String(50), nullable=False)
-    # CAMBIATO: da String(50) → Text per permettere frasi lunghe
-    tipo = db.Column(db.Text, nullable=False)
+    tipo = db.Column(db.Text, nullable=False)  # frasi lunghe
     urgenza = db.Column(db.String(50), nullable=False)
     stato = db.Column(db.String(50), default="Aperto")
     autore = db.Column(db.String(80), nullable=False)
+    data_creazione = db.Column(db.DateTime, default=datetime.utcnow)  # 👈 data e ora
 
     def __repr__(self):
         return f"<Problem {self.id} - {self.tipo[:20]}>"
