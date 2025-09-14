@@ -14,16 +14,13 @@ from sqlalchemy import text
 from models import db, User, Problem
 
 # ========= Admin fisso (NON modificabile da UI) =========
-# Username fisso
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-# Hash PBKDF2 per la password "SigraFilm2025"
-# (verificato con werkzeug.security.check_password_hash)
+# Hash per la password "SigraFilm2025" (Werkzeug pbkdf2)
 ADMIN_PWHASH = os.environ.get(
     "ADMIN_PWHASH",
     "pbkdf2:sha256:600000$4c9dffeab792988a8b76f724c88c046f$f455e231de40a64d360149b5b78bd37787825de330f9d9a5fbd10fbaa6c5bcc6"
 )
-# Se True, l'app ripristina forzatamente l'hash/ruolo dell'admin
-LOCK_ADMIN = True
+LOCK_ADMIN = True  # forza sempre ruolo admin + hash corretto
 # =========================================================
 
 
@@ -32,7 +29,8 @@ def create_app():
 
     # ------------------- Config -------------------
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
-    # Normalizza postgres:// -> postgresql://
+
+    # Normalizza postgres:// -> postgresql:// per SQLAlchemy
     uri = os.environ.get("DATABASE_URL", "sqlite:///sigra.db")
     if uri.startswith("postgres://"):
         uri = uri.replace("postgres://", "postgresql://", 1)
@@ -83,26 +81,22 @@ def create_app():
             username = (request.form.get("username") or "").strip()
             password = request.form.get("password") or ""
 
-            # Caso speciale: admin fisso
+            # Admin fisso: verifica contro hash hardcoded
             if username == ADMIN_USERNAME:
-                # Verifica con hash hardcoded
                 if not check_password_hash(ADMIN_PWHASH, password):
                     flash("Credenziali non valide.", "danger")
                     return render_template("login.html")
-
-                # Assicura che l'utente admin esista nel DB e ottieni l'id
                 admin = User.query.filter_by(username=ADMIN_USERNAME).first()
                 if not admin:
                     _ensure_admin_user()
                     admin = User.query.filter_by(username=ADMIN_USERNAME).first()
-
                 session["user_id"] = admin.id
                 session["username"] = admin.username
                 session["role"] = "admin"
                 flash(f"Benvenuto, {admin.username}!", "success")
                 return redirect(url_for("dashboard"))
 
-            # Login normale per altri utenti DB
+            # Utenti normali dal DB
             user = User.query.filter_by(username=username).first()
             if not user or not check_password_hash(user.password_hash, password):
                 flash("Credenziali non valide.", "danger")
@@ -136,7 +130,6 @@ def create_app():
     def add_problem():
         apertura_str = request.form.get("apertura")
         try:
-            # datetime-local -> stringa senza timezone (naive)
             apertura = datetime.fromisoformat(apertura_str) if apertura_str else datetime.utcnow()
         except Exception:
             apertura = datetime.utcnow()
@@ -153,7 +146,7 @@ def create_app():
         autore = current_user.username if current_user else "sconosciuto"
 
         problem = Problem(
-            cinema="",  # legacy, non più usato in UI
+            cinema="",  # legacy
             sala=sala,
             tipo=tipo,
             urgenza=urgenza,
@@ -220,7 +213,7 @@ def create_app():
             if role not in {"user", "admin"}:
                 role = "user"
 
-            # Impedisci di creare un utente col nome riservato all'admin fisso
+            # Nome "admin" riservato
             if username == ADMIN_USERNAME:
                 flash("L'utente admin è riservato e non modificabile.", "danger")
                 return redirect(url_for("admin_users"))
@@ -251,7 +244,6 @@ def create_app():
     @login_required
     @admin_required
     def wipe_db():
-        # Abilita esplicitamente: ENABLE_DANGEROUS_WIPE=1
         if os.environ.get("ENABLE_DANGEROUS_WIPE") != "1":
             abort(403)
 
@@ -278,6 +270,30 @@ def create_app():
 
         flash("Database svuotato: tabelle vuote e ID azzerati.", "warning")
         return redirect(url_for("dashboard"))
+
+    # ------------------- Debug routes (attivabili via env) -------------------
+    if os.environ.get("ENABLE_DEBUG_ROUTES") == "1":
+        from sqlalchemy import inspect
+
+        @app.route("/_debug/db")
+        def _debug_db():
+            eng_url = db.engine.url.render_as_string(hide_password=True)
+            insp = inspect(db.engine)
+            tables = insp.get_table_names(schema="public")
+            sample = db.session.execute(text('SELECT id, username, role FROM "user" ORDER BY id LIMIT 5')).fetchall()
+            return {
+                "engine": eng_url,
+                "tables_public": tables,
+                "sample_users": [dict(row._mapping) for row in sample]
+            }
+
+        @app.route("/_debug/login")
+        def _debug_login():
+            return {
+                "admin_username": ADMIN_USERNAME,
+                "hash_prefix": ADMIN_PWHASH[:25],
+                "check_SigraFilm2025": bool(check_password_hash(ADMIN_PWHASH, "SigraFilm2025")),
+            }
 
     return app
 
