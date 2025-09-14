@@ -13,13 +13,31 @@ from sqlalchemy import text
 
 from models import db, User, Problem
 
+# ========= Admin fisso (NON modificabile da UI) =========
+# Username fisso
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+# Hash PBKDF2 per la password "SigraFilm2025"
+# (verificato con werkzeug.security.check_password_hash)
+ADMIN_PWHASH = os.environ.get(
+    "ADMIN_PWHASH",
+    "pbkdf2:sha256:600000$4c9dffeab792988a8b76f724c88c046f$f455e231de40a64d360149b5b78bd37787825de330f9d9a5fbd10fbaa6c5bcc6"
+)
+# Se True, l'app ripristina forzatamente l'hash/ruolo dell'admin
+LOCK_ADMIN = True
+# =========================================================
+
 
 def create_app():
     app = Flask(__name__)
 
     # ------------------- Config -------------------
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///sigra.db")
+    # Normalizza postgres:// -> postgresql://
+    uri = os.environ.get("DATABASE_URL", "sqlite:///sigra.db")
+    if uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql://", 1)
+    app.config["SQLALCHEMY_DATABASE_URI"] = uri
+
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 
@@ -27,6 +45,7 @@ def create_app():
     db.init_app(app)
     with app.app_context():
         db.create_all()
+        _ensure_admin_user()
 
     # ------------------- Helpers -------------------
     def login_required(f):
@@ -61,9 +80,29 @@ def create_app():
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
-            username = request.form.get("username", "").strip()
-            password = request.form.get("password", "")
+            username = (request.form.get("username") or "").strip()
+            password = request.form.get("password") or ""
 
+            # Caso speciale: admin fisso
+            if username == ADMIN_USERNAME:
+                # Verifica con hash hardcoded
+                if not check_password_hash(ADMIN_PWHASH, password):
+                    flash("Credenziali non valide.", "danger")
+                    return render_template("login.html")
+
+                # Assicura che l'utente admin esista nel DB e ottieni l'id
+                admin = User.query.filter_by(username=ADMIN_USERNAME).first()
+                if not admin:
+                    _ensure_admin_user()
+                    admin = User.query.filter_by(username=ADMIN_USERNAME).first()
+
+                session["user_id"] = admin.id
+                session["username"] = admin.username
+                session["role"] = "admin"
+                flash(f"Benvenuto, {admin.username}!", "success")
+                return redirect(url_for("dashboard"))
+
+            # Login normale per altri utenti DB
             user = User.query.filter_by(username=username).first()
             if not user or not check_password_hash(user.password_hash, password):
                 flash("Credenziali non valide.", "danger")
@@ -181,6 +220,11 @@ def create_app():
             if role not in {"user", "admin"}:
                 role = "user"
 
+            # Impedisci di creare un utente col nome riservato all'admin fisso
+            if username == ADMIN_USERNAME:
+                flash("L'utente admin è riservato e non modificabile.", "danger")
+                return redirect(url_for("admin_users"))
+
             if not username or not password:
                 flash("Username e password sono obbligatori.", "warning")
                 return redirect(url_for("admin_users"))
@@ -229,40 +273,33 @@ def create_app():
             db.session.execute(text(sql))
             db.session.commit()
 
+        # Dopo wipe, ricrea/risincronizza l'admin fisso
+        _ensure_admin_user()
+
         flash("Database svuotato: tabelle vuote e ID azzerati.", "warning")
         return redirect(url_for("dashboard"))
 
-    # ------------------- Init/Reset admin -------------------
-    @app.route("/init-admin")
-    def init_admin():
-        """
-        Crea l'utente admin se non esiste, oppure aggiorna la password.
-        Richiede ALLOW_INIT_ADMIN=1 (rimuovere subito dopo l'uso).
-        Username/password di default: admin / SigraFilm2025.
-        Sovrascrivibili con INIT_ADMIN_USER / INIT_ADMIN_PASS.
-        """
-        if os.environ.get("ALLOW_INIT_ADMIN") != "1":
-            return "Bloccato: manca ALLOW_INIT_ADMIN=1", 403
-
-        username = os.environ.get("INIT_ADMIN_USER", "admin")
-        password = os.environ.get("INIT_ADMIN_PASS", "SigraFilm2025")
-
-        user = User.query.filter_by(username=username).first()
-        if user:
-            user.password_hash = generate_password_hash(password)
-            msg = f"Password aggiornata per '{username}'."
-        else:
-            user = User(username=username,
-                        password_hash=generate_password_hash(password),
-                        role="admin")
-            db.session.add(user)
-            msg = f"Creato admin '{username}'."
-
-        db.session.commit()
-        flash(msg, "success")
-        return redirect(url_for("login"))
-
     return app
+
+
+def _ensure_admin_user():
+    """Crea (o ripristina) l'utente admin fisso nel DB."""
+    admin = User.query.filter_by(username=ADMIN_USERNAME).first()
+    if not admin:
+        admin = User(username=ADMIN_USERNAME, password_hash=ADMIN_PWHASH, role="admin")
+        db.session.add(admin)
+        db.session.commit()
+        return
+
+    changed = False
+    if admin.role != "admin":
+        admin.role = "admin"
+        changed = True
+    if LOCK_ADMIN and admin.password_hash != ADMIN_PWHASH:
+        admin.password_hash = ADMIN_PWHASH
+        changed = True
+    if changed:
+        db.session.commit()
 
 
 # Istanza globale per Gunicorn (app:app)
