@@ -1,33 +1,17 @@
-# app.py
 import os
-import secrets
 from datetime import datetime
 from functools import wraps
 
-from flask import (
-    Flask, render_template, request, redirect, url_for,
-    session, flash, abort
-)
+from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
 from werkzeug.security import check_password_hash, generate_password_hash
-from sqlalchemy import text
 
 from models import db, User, Problem
-
-# ========= Admin fisso (NON modificabile da UI) =========
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-# Hash per la password "SigraFilm2025" (Werkzeug pbkdf2)
-ADMIN_PWHASH = os.environ.get(
-    "ADMIN_PWHASH",
-    "pbkdf2:sha256:600000$4c9dffeab792988a8b76f724c88c046f$f455e231de40a64d360149b5b78bd37787825de330f9d9a5fbd10fbaa6c5bcc6"
-)
-LOCK_ADMIN = True  # forza sempre ruolo admin + hash corretto
-# =========================================================
 
 
 def create_app():
     app = Flask(__name__)
 
-    # ------------------- Config -------------------
+    # --- Config base ---
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
     # Normalizza postgres:// -> postgresql:// per SQLAlchemy
@@ -39,13 +23,12 @@ def create_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-    # ------------------- DB init -------------------
+    # --- DB ---
     db.init_app(app)
     with app.app_context():
         db.create_all()
-        _ensure_admin_user()
 
-    # ------------------- Helpers -------------------
+    # --- Helpers ---
     def login_required(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
@@ -62,41 +45,13 @@ def create_app():
             return f(*args, **kwargs)
         return wrapper
 
-    # CSRF minimale per form sensibili
-    def _csrf_token():
-        token = session.get("_csrf_token")
-        if not token:
-            token = secrets.token_urlsafe(32)
-            session["_csrf_token"] = token
-        return token
-
-    @app.context_processor
-    def inject_csrf():
-        return {"csrf_token": _csrf_token}
-
-    # ------------------- Auth -------------------
+    # --- Auth ---
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
-            username = (request.form.get("username") or "").strip()
-            password = request.form.get("password") or ""
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
 
-            # Admin fisso: verifica contro hash hardcoded
-            if username == ADMIN_USERNAME:
-                if not check_password_hash(ADMIN_PWHASH, password):
-                    flash("Credenziali non valide.", "danger")
-                    return render_template("login.html")
-                admin = User.query.filter_by(username=ADMIN_USERNAME).first()
-                if not admin:
-                    _ensure_admin_user()
-                    admin = User.query.filter_by(username=ADMIN_USERNAME).first()
-                session["user_id"] = admin.id
-                session["username"] = admin.username
-                session["role"] = "admin"
-                flash(f"Benvenuto, {admin.username}!", "success")
-                return redirect(url_for("dashboard"))
-
-            # Utenti normali dal DB
             user = User.query.filter_by(username=username).first()
             if not user or not check_password_hash(user.password_hash, password):
                 flash("Credenziali non valide.", "danger")
@@ -107,7 +62,6 @@ def create_app():
             session["role"] = user.role
             flash(f"Benvenuto, {user.username}!", "success")
             return redirect(url_for("dashboard"))
-
         return render_template("login.html")
 
     @app.route("/logout")
@@ -116,7 +70,7 @@ def create_app():
         flash("Disconnesso con successo.", "info")
         return redirect(url_for("login"))
 
-    # ------------------- Dashboard -------------------
+    # --- Dashboard ---
     @app.route("/")
     @app.route("/dashboard")
     @login_required
@@ -124,14 +78,15 @@ def create_app():
         problems = Problem.query.order_by(Problem.id.desc()).all()
         return render_template("dashboard.html", problems=problems)
 
-    # ------------------- CRUD Problemi -------------------
+    # --- CRUD Problemi ---
     @app.route("/add_problem", methods=["POST"])
     @login_required
     def add_problem():
+        # NUOVO: data/ora apertura dal form (datetime-local -> stringa ISO senza timezone)
         apertura_str = request.form.get("apertura")
         try:
             apertura = datetime.fromisoformat(apertura_str) if apertura_str else datetime.utcnow()
-        except Exception:
+        except ValueError:
             apertura = datetime.utcnow()
 
         sala = (request.form.get("sala") or "").strip()
@@ -142,11 +97,9 @@ def create_app():
             flash("Compila tutti i campi obbligatori.", "warning")
             return redirect(url_for("dashboard"))
 
-        current_user = User.query.get(session["user_id"])
-        autore = current_user.username if current_user else "sconosciuto"
+        autore = User.query.get(session["user_id"]).username
 
-        problem = Problem(
-            cinema="",  # legacy
+        new_problem = Problem(
             sala=sala,
             tipo=tipo,
             urgenza=urgenza,
@@ -154,7 +107,7 @@ def create_app():
             autore=autore,
             apertura=apertura
         )
-        db.session.add(problem)
+        db.session.add(new_problem)
         db.session.commit()
         flash("Problema registrato con successo!", "success")
         return redirect(url_for("dashboard"))
@@ -163,45 +116,37 @@ def create_app():
     @login_required
     @admin_required
     def edit_problem(problem_id: int):
-        problem = Problem.query.get_or_404(problem_id)
-
+        p = Problem.query.get_or_404(problem_id)
         if request.method == "POST":
-            sala = (request.form.get("sala") or "").strip()
-            tipo = (request.form.get("tipo") or "").strip()
-            urgenza = request.form.get("urgenza") or problem.urgenza
-            stato = request.form.get("stato") or problem.stato
+            p.sala = (request.form.get("sala") or p.sala).strip()
+            p.tipo = (request.form.get("tipo") or p.tipo).strip()
+            p.urgenza = request.form.get("urgenza") or p.urgenza
+            p.stato = request.form.get("stato") or p.stato
 
             apertura_str = request.form.get("apertura")
             if apertura_str:
                 try:
-                    problem.apertura = datetime.fromisoformat(apertura_str)
-                except Exception:
-                    flash("Formato data/ora non valido. Lasciata invariata.", "warning")
-
-            if sala:
-                problem.sala = sala
-            if tipo:
-                problem.tipo = tipo
-            problem.urgenza = urgenza
-            problem.stato = stato
+                    p.apertura = datetime.fromisoformat(apertura_str)
+                except ValueError:
+                    flash("Formato data/ora non valido. Apertura non modificata.", "warning")
 
             db.session.commit()
             flash("Problema aggiornato.", "success")
             return redirect(url_for("dashboard"))
 
-        return render_template("edit_problem.html", problem=problem)
+        return render_template("edit_problem.html", problem=p)
 
     @app.route("/delete_problem/<int:problem_id>", methods=["POST"])
     @login_required
     @admin_required
     def delete_problem(problem_id: int):
-        problem = Problem.query.get_or_404(problem_id)
-        db.session.delete(problem)
+        p = Problem.query.get_or_404(problem_id)
+        db.session.delete(p)
         db.session.commit()
         flash("Problema eliminato.", "info")
         return redirect(url_for("dashboard"))
 
-    # ------------------- Admin utenti -------------------
+    # --- Admin utenti (se già presente nei tuoi template) ---
     @app.route("/admin/users", endpoint="admin_users", methods=["GET", "POST"])
     @login_required
     @admin_required
@@ -212,11 +157,6 @@ def create_app():
             role = (request.form.get("role") or "user").strip().lower()
             if role not in {"user", "admin"}:
                 role = "user"
-
-            # Nome "admin" riservato
-            if username == ADMIN_USERNAME:
-                flash("L'utente admin è riservato e non modificabile.", "danger")
-                return redirect(url_for("admin_users"))
 
             if not username or not password:
                 flash("Username e password sono obbligatori.", "warning")
@@ -239,83 +179,7 @@ def create_app():
         users = User.query.order_by(User.id.asc()).all()
         return render_template("admin_users.html", users=users)
 
-    # ------------------- Dangerous wipe (opzionale, protetto) -------------------
-    @app.route("/admin/wipe", methods=["POST"])
-    @login_required
-    @admin_required
-    def wipe_db():
-        if os.environ.get("ENABLE_DANGEROUS_WIPE") != "1":
-            abort(403)
-
-        token = request.form.get("csrf_token")
-        if not token or token != session.get("_csrf_token"):
-            abort(400, description="CSRF token non valido")
-
-        confirm = (request.form.get("confirm_phrase") or "").strip().lower()
-        if confirm != "cancella tutto":
-            flash("Frase di conferma errata. Digita: CANCELLA TUTTO", "danger")
-            return redirect(url_for("dashboard"))
-
-        # TRUNCATE tutte le tabelle dello schema 'public' e reset ID
-        meta = db.metadata
-        meta.reflect(bind=db.engine)
-        tables = [t.name for t in meta.sorted_tables]
-        if tables:
-            sql = "TRUNCATE " + ", ".join([f'"{t}"' for t in tables]) + " RESTART IDENTITY CASCADE;"
-            db.session.execute(text(sql))
-            db.session.commit()
-
-        # Dopo wipe, ricrea/risincronizza l'admin fisso
-        _ensure_admin_user()
-
-        flash("Database svuotato: tabelle vuote e ID azzerati.", "warning")
-        return redirect(url_for("dashboard"))
-
-    # ------------------- Debug routes (attivabili via env) -------------------
-    if os.environ.get("ENABLE_DEBUG_ROUTES") == "1":
-        from sqlalchemy import inspect
-
-        @app.route("/_debug/db")
-        def _debug_db():
-            eng_url = db.engine.url.render_as_string(hide_password=True)
-            insp = inspect(db.engine)
-            tables = insp.get_table_names(schema="public")
-            sample = db.session.execute(text('SELECT id, username, role FROM "user" ORDER BY id LIMIT 5')).fetchall()
-            return {
-                "engine": eng_url,
-                "tables_public": tables,
-                "sample_users": [dict(row._mapping) for row in sample]
-            }
-
-        @app.route("/_debug/login")
-        def _debug_login():
-            return {
-                "admin_username": ADMIN_USERNAME,
-                "hash_prefix": ADMIN_PWHASH[:25],
-                "check_SigraFilm2025": bool(check_password_hash(ADMIN_PWHASH, "SigraFilm2025")),
-            }
-
     return app
-
-
-def _ensure_admin_user():
-    """Crea (o ripristina) l'utente admin fisso nel DB."""
-    admin = User.query.filter_by(username=ADMIN_USERNAME).first()
-    if not admin:
-        admin = User(username=ADMIN_USERNAME, password_hash=ADMIN_PWHASH, role="admin")
-        db.session.add(admin)
-        db.session.commit()
-        return
-
-    changed = False
-    if admin.role != "admin":
-        admin.role = "admin"
-        changed = True
-    if LOCK_ADMIN and admin.password_hash != ADMIN_PWHASH:
-        admin.password_hash = ADMIN_PWHASH
-        changed = True
-    if changed:
-        db.session.commit()
 
 
 # Istanza globale per Gunicorn (app:app)
