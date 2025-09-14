@@ -8,6 +8,7 @@ from flask import (
     session, flash, abort
 )
 from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy import text
 
 from models import db, User, Problem
 
@@ -44,6 +45,19 @@ def create_app():
             return f(*args, **kwargs)
         return wrapper
 
+    # ------------------- CSRF minimale per form sensibili -------------------
+    import secrets
+    def _csrf_token():
+        token = session.get("_csrf_token")
+        if not token:
+            token = secrets.token_urlsafe(32)
+            session["_csrf_token"] = token
+        return token
+
+    @app.context_processor
+    def inject_csrf():
+        return {"csrf_token": _csrf_token}
+
     # ------------------- Auth -------------------
 
     @app.route("/login", methods=["GET", "POST"])
@@ -79,7 +93,6 @@ def create_app():
     @app.route("/dashboard")
     @login_required
     def dashboard():
-        # Mostra tutti i problemi (ordinamento iniziale: id desc)
         problems = Problem.query.order_by(Problem.id.desc()).all()
         return render_template("dashboard.html", problems=problems)
 
@@ -88,15 +101,8 @@ def create_app():
     @app.route("/add_problem", methods=["POST"])
     @login_required
     def add_problem():
-        """
-        Crea un nuovo problema.
-        - Legge 'apertura' (datetime-local: 'YYYY-MM-DDTHH:MM')
-        - 'cinema' non è più usato in UI -> lo lasciamo vuoto per compatibilità DB
-        """
-        # Apertura
         apertura_str = request.form.get("apertura")
         try:
-            # datetime-local invia stringa senza timezone; la teniamo come naive UTC-like
             apertura = datetime.fromisoformat(apertura_str) if apertura_str else datetime.utcnow()
         except Exception:
             apertura = datetime.utcnow()
@@ -113,7 +119,7 @@ def create_app():
         autore = current_user.username if current_user else "sconosciuto"
 
         problem = Problem(
-            cinema="",                # campo legacy, lasciato vuoto
+            cinema="",  # legacy
             sala=sala,
             tipo=tipo,
             urgenza=urgenza,
@@ -133,7 +139,6 @@ def create_app():
         problem = Problem.query.get_or_404(problem_id)
 
         if request.method == "POST":
-            # Consentiamo di aggiornare sala/tipo/urgenza/stato/apertura
             sala = (request.form.get("sala") or "").strip()
             tipo = (request.form.get("tipo") or "").strip()
             urgenza = request.form.get("urgenza") or problem.urgenza
@@ -157,7 +162,6 @@ def create_app():
             flash("Problema aggiornato.", "success")
             return redirect(url_for("dashboard"))
 
-        # GET -> mostra form di modifica (crea un semplice template o riusa uno esistente)
         return render_template("edit_problem.html", problem=problem)
 
     @app.route("/delete_problem/<int:problem_id>", methods=["POST"])
@@ -176,11 +180,6 @@ def create_app():
     @login_required
     @admin_required
     def admin_users():
-        """
-        Semplice gestione utenti:
-        - GET: lista utenti
-        - POST: crea utente (username, password, role)
-        """
         if request.method == "POST":
             username = (request.form.get("username") or "").strip()
             password = request.form.get("password") or ""
@@ -209,36 +208,42 @@ def create_app():
         users = User.query.order_by(User.id.asc()).all()
         return render_template("admin_users.html", users=users)
 
-    # ------------------- Utility: crea admin iniziale (opzionale) -------------------
+    # ------------------- Dangerous wipe (opzionale, protetto) -------------------
 
-    @app.route("/init-admin")
-    def init_admin():
-        """
-        Crea un utente admin di default se non esiste.
-        Usa variabili d'ambiente:
-          INIT_ADMIN_USER (default: admin)
-          INIT_ADMIN_PASS (default: admin)
-        """
-        username = os.environ.get("INIT_ADMIN_USER", "admin")
-        password = os.environ.get("INIT_ADMIN_PASS", "admin")
-        if User.query.filter_by(username=username).first():
-            flash("Admin già presente.", "info")
-            return redirect(url_for("login"))
+    @app.route("/admin/wipe", methods=["POST"])
+    @login_required
+    @admin_required
+    def wipe_db():
+        if os.environ.get("ENABLE_DANGEROUS_WIPE") != "1":
+            abort(403)
 
-        user = User(username=username,
-                    password_hash=generate_password_hash(password),
-                    role="admin")
-        db.session.add(user)
-        db.session.commit()
-        flash(f"Creato admin '{username}'.", "success")
-        return redirect(url_for("login"))
+        token = request.form.get("csrf_token")
+        if not token or token != session.get("_csrf_token"):
+            abort(400, description="CSRF token non valido")
+
+        confirm = (request.form.get("confirm_phrase") or "").strip().lower()
+        if confirm != "cancella tutto":
+            flash("Frase di conferma errata. Digita: CANCELLA TUTTO", "danger")
+            return redirect(url_for("dashboard"))
+
+        meta = db.metadata
+        meta.reflect(bind=db.engine)
+        tables = [t.name for t in meta.sorted_tables]
+        if tables:
+            sql = "TRUNCATE " + ", ".join([f'"{t}"' for t in tables]) + " RESTART IDENTITY CASCADE;"
+            db.session.execute(text(sql))
+            db.session.commit()
+
+        flash("Database svuotato: tabelle vuote e ID azzerati.", "warning")
+        return redirect(url_for("dashboard"))
 
     return app
 
 
-# Avvio locale
+# ✅ Istanza globale per Gunicorn (importa: app:app)
+app = create_app()
+
+# Avvio locale solo quando esegui python app.py
 if __name__ == "__main__":
-    app = create_app()
-    # Host 0.0.0.0 per container/docker; cambia la porta con PORT env se vuoi
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
