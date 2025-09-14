@@ -1,140 +1,244 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
-from werkzeug.security import generate_password_hash, check_password_hash
+# app.py
+import os
+from datetime import datetime
+from functools import wraps
+
+from flask import (
+    Flask, render_template, request, redirect, url_for,
+    session, flash, abort
+)
+from werkzeug.security import check_password_hash, generate_password_hash
+
 from models import db, User, Problem
 
-app = Flask(__name__)
-app.secret_key = "sigrafilm-secret"
 
-# Connessione DB (Render sovrascrive con DATABASE_URL)
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://sigrafilm_db_user:aTaxodWqw29ViddgvGpzT21EGjME4AHM@dpg-d31i59m3jp1c73fu9efg-a.frankfurt-postgres.render.com/sigrafilm_db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db.init_app(app)
+def create_app():
+    app = Flask(__name__)
 
+    # Config base
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///sigra.db")
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-@app.route("/add_problem", methods=["POST"])
-def add_problem():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
+    # Init DB
+    db.init_app(app)
+    with app.app_context():
+        db.create_all()
 
-    cinema = request.form["cinema"]
-    sala = request.form["sala"]
-    tipo = request.form["tipo"]
-    urgenza = request.form["urgenza"]
+    # ------------------- Helper: decorators -------------------
 
-    new_problem = Problem(
-        cinema=cinema,
-        sala=sala,
-        tipo=tipo,
-        urgenza=urgenza,
-        stato="Aperto",
-        autore=User.query.get(session["user_id"]).username
-    )
-    db.session.add(new_problem)
-    db.session.commit()
+    def login_required(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if "user_id" not in session:
+                return redirect(url_for("login"))
+            return f(*args, **kwargs)
+        return wrapper
 
-    flash("Problema registrato con successo!", "success")
-    return redirect(url_for("dashboard"))
+    def admin_required(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if session.get("role") != "admin":
+                abort(403)
+            return f(*args, **kwargs)
+        return wrapper
 
+    # ------------------- Auth -------------------
 
-@app.route("/")
-def index():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-    return redirect(url_for("dashboard"))
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if request.method == "POST":
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
 
+            user = User.query.filter_by(username=username).first()
+            if not user or not check_password_hash(user.password_hash, password):
+                flash("Credenziali non valide.", "danger")
+                return render_template("login.html")
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        user = User.query.filter_by(username=request.form["username"]).first()
-        if user and check_password_hash(user.password_hash, request.form["password"]):
+            # Login ok
             session["user_id"] = user.id
+            session["username"] = user.username
             session["role"] = user.role
+            flash(f"Benvenuto, {user.username}!", "success")
             return redirect(url_for("dashboard"))
-        else:
-            flash("Credenziali non valide", "danger")
-    return render_template("login.html")
 
+        # GET
+        return render_template("login.html")
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
-
-
-@app.route("/dashboard")
-def dashboard():
-    if "user_id" not in session:
+    @app.route("/logout")
+    def logout():
+        session.clear()
+        flash("Disconnesso con successo.", "info")
         return redirect(url_for("login"))
 
-    user = User.query.get(session["user_id"])
-    if user.role == "admin":
-        problems = Problem.query.all()
-    else:
-        problems = Problem.query.filter_by(autore=user.username).all()
+    # ------------------- Dashboard -------------------
 
-    return render_template("dashboard.html", problems=problems)
+    @app.route("/")
+    @app.route("/dashboard")
+    @login_required
+    def dashboard():
+        # Mostra tutti i problemi (ordinamento iniziale: id desc)
+        problems = Problem.query.order_by(Problem.id.desc()).all()
+        return render_template("dashboard.html", problems=problems)
 
+    # ------------------- CRUD Problemi -------------------
 
-@app.route("/delete_problem/<int:problem_id>", methods=["POST"])
-def delete_problem(problem_id):
-    if session.get("role") != "admin":
-        return "Accesso negato", 403
+    @app.route("/add_problem", methods=["POST"])
+    @login_required
+    def add_problem():
+        """
+        Crea un nuovo problema.
+        - Legge 'apertura' (datetime-local: 'YYYY-MM-DDTHH:MM')
+        - 'cinema' non è più usato in UI -> lo lasciamo vuoto per compatibilità DB
+        """
+        # Apertura
+        apertura_str = request.form.get("apertura")
+        try:
+            # datetime-local invia stringa senza timezone; la teniamo come naive UTC-like
+            apertura = datetime.fromisoformat(apertura_str) if apertura_str else datetime.utcnow()
+        except Exception:
+            apertura = datetime.utcnow()
 
-    problem = Problem.query.get_or_404(problem_id)
-    db.session.delete(problem)
-    db.session.commit()
-    flash("Problema eliminato", "warning")
-    return redirect(url_for("dashboard"))
+        sala = (request.form.get("sala") or "").strip()
+        tipo = (request.form.get("tipo") or "").strip()
+        urgenza = request.form.get("urgenza") or "Non urgente"
 
+        if not sala or not tipo:
+            flash("Compila tutti i campi obbligatori.", "warning")
+            return redirect(url_for("dashboard"))
 
-@app.route("/edit_problem/<int:problem_id>", methods=["GET", "POST"])
-def edit_problem(problem_id):
-    if session.get("role") != "admin":
-        return "Accesso negato", 403
+        current_user = User.query.get(session["user_id"])
+        autore = current_user.username if current_user else "sconosciuto"
 
-    problem = Problem.query.get_or_404(problem_id)
-
-    if request.method == "POST":
-        problem.sala = request.form["sala"]
-        problem.tipo = request.form["tipo"]
-        problem.urgenza = request.form["urgenza"]
-        problem.stato = request.form["stato"]
+        problem = Problem(
+            cinema="",                # campo legacy, lasciato vuoto
+            sala=sala,
+            tipo=tipo,
+            urgenza=urgenza,
+            stato="Aperto",
+            autore=autore,
+            apertura=apertura
+        )
+        db.session.add(problem)
         db.session.commit()
-        flash("Problema aggiornato", "info")
+        flash("Problema registrato con successo!", "success")
         return redirect(url_for("dashboard"))
 
-    return render_template("edit_problem.html", problem=problem)
+    @app.route("/edit_problem/<int:problem_id>", methods=["GET", "POST"])
+    @login_required
+    @admin_required
+    def edit_problem(problem_id: int):
+        problem = Problem.query.get_or_404(problem_id)
 
+        if request.method == "POST":
+            # Consentiamo di aggiornare sala/tipo/urgenza/stato/apertura
+            sala = (request.form.get("sala") or "").strip()
+            tipo = (request.form.get("tipo") or "").strip()
+            urgenza = request.form.get("urgenza") or problem.urgenza
+            stato = request.form.get("stato") or problem.stato
 
-@app.route("/admin/users", methods=["GET", "POST"])
-def admin_users():
-    if session.get("role") != "admin":
-        return "Accesso negato", 403
+            apertura_str = request.form.get("apertura")
+            if apertura_str:
+                try:
+                    problem.apertura = datetime.fromisoformat(apertura_str)
+                except Exception:
+                    flash("Formato data/ora non valido. Lasciata invariata.", "warning")
 
-    if request.method == "POST":
-        username = request.form["username"]
-        password = generate_password_hash(request.form["password"])
-        new_user = User(username=username, password_hash=password, role="user")
-        db.session.add(new_user)
+            if sala:
+                problem.sala = sala
+            if tipo:
+                problem.tipo = tipo
+            problem.urgenza = urgenza
+            problem.stato = stato
+
+            db.session.commit()
+            flash("Problema aggiornato.", "success")
+            return redirect(url_for("dashboard"))
+
+        # GET -> mostra form di modifica (crea un semplice template o riusa uno esistente)
+        return render_template("edit_problem.html", problem=problem)
+
+    @app.route("/delete_problem/<int:problem_id>", methods=["POST"])
+    @login_required
+    @admin_required
+    def delete_problem(problem_id: int):
+        problem = Problem.query.get_or_404(problem_id)
+        db.session.delete(problem)
         db.session.commit()
-        flash("Utente creato con successo", "success")
+        flash("Problema eliminato.", "info")
+        return redirect(url_for("dashboard"))
 
-    users = User.query.all()
-    return render_template("users.html", users=users)
+    # ------------------- Admin utenti -------------------
 
+    @app.route("/admin/users", endpoint="admin_users", methods=["GET", "POST"])
+    @login_required
+    @admin_required
+    def admin_users():
+        """
+        Semplice gestione utenti:
+        - GET: lista utenti
+        - POST: crea utente (username, password, role)
+        """
+        if request.method == "POST":
+            username = (request.form.get("username") or "").strip()
+            password = request.form.get("password") or ""
+            role = (request.form.get("role") or "user").strip().lower()
+            if role not in {"user", "admin"}:
+                role = "user"
 
-# Creazione tabelle + admin di default
-with app.app_context():
-    db.create_all()
-    if not User.query.filter_by(username="admin").first():
-        admin = User(
-            username="admin",
-            password_hash=generate_password_hash("SigraFilm2025"),
-            role="admin"
-        )
-        db.session.add(admin)
+            if not username or not password:
+                flash("Username e password sono obbligatori.", "warning")
+                return redirect(url_for("admin_users"))
+
+            if User.query.filter_by(username=username).first():
+                flash("Username già esistente.", "danger")
+                return redirect(url_for("admin_users"))
+
+            user = User(
+                username=username,
+                password_hash=generate_password_hash(password),
+                role=role
+            )
+            db.session.add(user)
+            db.session.commit()
+            flash("Utente creato.", "success")
+            return redirect(url_for("admin_users"))
+
+        users = User.query.order_by(User.id.asc()).all()
+        return render_template("admin_users.html", users=users)
+
+    # ------------------- Utility: crea admin iniziale (opzionale) -------------------
+
+    @app.route("/init-admin")
+    def init_admin():
+        """
+        Crea un utente admin di default se non esiste.
+        Usa variabili d'ambiente:
+          INIT_ADMIN_USER (default: admin)
+          INIT_ADMIN_PASS (default: admin)
+        """
+        username = os.environ.get("INIT_ADMIN_USER", "admin")
+        password = os.environ.get("INIT_ADMIN_PASS", "admin")
+        if User.query.filter_by(username=username).first():
+            flash("Admin già presente.", "info")
+            return redirect(url_for("login"))
+
+        user = User(username=username,
+                    password_hash=generate_password_hash(password),
+                    role="admin")
+        db.session.add(user)
         db.session.commit()
+        flash(f"Creato admin '{username}'.", "success")
+        return redirect(url_for("login"))
 
+    return app
+
+
+# Avvio locale
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app = create_app()
+    # Host 0.0.0.0 per container/docker; cambia la porta con PORT env se vuoi
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
