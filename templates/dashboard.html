@@ -8,30 +8,28 @@
 </head>
 <body>
 
-  <!-- Navbar responsive con logo -->
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <!-- Logo mobile -->
+
+      <!-- Logo -->
       <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
-  <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
-</a>
+        <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
+      </a>
 
-
-      <!-- Bottone hamburger -->
+      <!-- Hamburger -->
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
         <span class="navbar-toggler-icon"></span>
       </button>
 
-      <!-- Contenuto navbar -->
       <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-        <!-- Logo desktop -->
         <a class="navbar-brand d-none d-lg-block mx-auto" href="#">
           <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
         </a>
 
         <div class="d-flex">
           {% if session.get("role") == "admin" %}
-            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light me-2">Gestione Utenti</a>
+            <a href="{{ url_for('users') }}" class="btn btn-outline-light me-2">Gestione Utenti</a>
           {% endif %}
           <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
         </div>
