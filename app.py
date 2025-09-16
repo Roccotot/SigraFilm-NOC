@@ -2,7 +2,7 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# usa il tuo models.py (già corretto con __tablename__ = "users" e password_hash Text)
+# usa il tuo models.py (corretto con __tablename__ = "users")
 from models import db, User
 
 # ---------------------------
@@ -10,12 +10,12 @@ from models import db, User
 # ---------------------------
 app = Flask(__name__)
 
-# Normalizza DATABASE_URL (Render a volte fornisce postgres://; SQLAlchemy vuole postgresql://)
+# Normalizza DATABASE_URL (Render a volte usa postgres:// → serve postgresql://)
 raw_db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db")
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
-# Assicura sslmode=require per Render se manca
+# Aggiungi sslmode=require se manca (Render lo richiede)
 if raw_db_url.startswith("postgresql://") and "render.com" in raw_db_url and "sslmode=" not in raw_db_url:
     sep = "&" if "?" in raw_db_url else "?"
     raw_db_url = f"{raw_db_url}{sep}sslmode=require"
@@ -24,7 +24,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SECRET_KEY", "devsecret")
 
-# Inizializza il DB con il modello esterno
+# Inizializza il DB
 db.init_app(app)
 
 # ---------------------------
@@ -45,7 +45,6 @@ def login():
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
 
-        # legge dalla tabella "users" grazie al modello in models.py
         u = db.session.execute(db.select(User).filter_by(username=username)).scalar()
         if u and check_password_hash(u.password_hash, password):
             session["user_id"] = u.id
@@ -148,7 +147,7 @@ def delete_user(user_id):
     return redirect(url_for("users"))
 
 # ---------------------------
-# Health / debug minimale
+# Health e debug
 # ---------------------------
 @app.route("/healthz")
 def healthz():
@@ -156,7 +155,20 @@ def healthz():
         total_users = db.session.execute(db.select(db.func.count()).select_from(User)).scalar() or 0
         return jsonify(status="ok", db=app.config["SQLALCHEMY_DATABASE_URI"], users=total_users)
     except Exception as e:
-        return jsonify(status="error", error=str(e), db=app.config.get("SQLALCHEMY_DATABASE_URI")), 500
+        return jsonify(status="error", error=str(e)), 500
+
+@app.route("/debug_login")
+def debug_login():
+    """Verifica se l'utente admin esiste e se la password Password123! funziona"""
+    u = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
+    if not u:
+        return {"found": False}, 404
+    return {
+        "found": True,
+        "username": u.username,
+        "hash": u.password_hash,
+        "check_Password123!": check_password_hash(u.password_hash, "Password123!"),
+    }
 
 # ---------------------------
 # Main (sviluppo locale)
