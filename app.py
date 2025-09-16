@@ -13,10 +13,13 @@ db = SQLAlchemy(app)
 
 # --- MODELLO ---
 class User(db.Model):
+    __tablename__ = "users"   # 👈 forza l’uso della tabella giusta
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
+    password_hash = db.Column(db.Text, nullable=False)  # meglio Text per non tagliare gli hash lunghi
     role = db.Column(db.String(20), default="user")
+
 
 # --- HOME ---
 @app.route("/")
