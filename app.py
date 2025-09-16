@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 import os
 
 # --- CONFIG ---
@@ -19,7 +20,7 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.Text, nullable=False)  # hash lungo supportato
+    password_hash = db.Column(db.Text, nullable=False)
     role = db.Column(db.String(20), nullable=False, default="user")
 
     def __repr__(self):
@@ -31,11 +32,11 @@ class Problem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cinema = db.Column(db.String(100), nullable=False)
-    sala = db.Column(db.String(50), nullable=False)
     tipo = db.Column(db.Text, nullable=False)
     urgenza = db.Column(db.String(50), nullable=False)
     stato = db.Column(db.String(50), default="Aperto")
     autore = db.Column(db.String(80), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # 🔥 nuovo campo
 
     def __repr__(self):
         return f"<Problem {self.id} - {self.tipo[:20]}>"
@@ -80,7 +81,9 @@ def dashboard():
     if "user_id" not in session:
         return redirect(url_for("login"))
 
-    problems = db.session.execute(db.select(Problem).order_by(Problem.id.desc())).scalars().all()
+    problems = db.session.execute(
+        db.select(Problem).order_by(Problem.id.desc())
+    ).scalars().all()
     return render_template("dashboard.html", problems=problems)
 
 
@@ -99,7 +102,9 @@ def users():
             flash("Username obbligatorio e password di almeno 8 caratteri.", "danger")
             return redirect(url_for("users"))
 
-        existing = db.session.execute(db.select(User).filter_by(username=username)).scalar()
+        existing = db.session.execute(
+            db.select(User).filter_by(username=username)
+        ).scalar()
         if existing:
             flash("Username già in uso.", "warning")
             return redirect(url_for("users"))
@@ -166,17 +171,16 @@ def add_problem():
         return redirect(url_for("login"))
 
     cinema = request.form.get("cinema", "").strip()
-    sala = request.form.get("sala", "").strip()
     tipo = request.form.get("tipo", "").strip()
     urgenza = request.form.get("urgenza", "Non urgente")
 
-    if not cinema or not sala or not tipo:
+    if not cinema or not tipo:
         flash("Tutti i campi sono obbligatori.", "danger")
         return redirect(url_for("dashboard"))
 
     autore = db.session.get(User, session["user_id"]).username
 
-    p = Problem(cinema=cinema, sala=sala, tipo=tipo, urgenza=urgenza, autore=autore)
+    p = Problem(cinema=cinema, tipo=tipo, urgenza=urgenza, autore=autore)
     db.session.add(p)
     db.session.commit()
     flash("Problema aggiunto con successo.", "success")
@@ -195,7 +199,6 @@ def edit_problem(problem_id):
 
     if request.method == "POST":
         p.cinema = request.form.get("cinema", p.cinema)
-        p.sala = request.form.get("sala", p.sala)
         p.tipo = request.form.get("tipo", p.tipo)
         p.urgenza = request.form.get("urgenza", p.urgenza)
         p.stato = request.form.get("stato", p.stato)
@@ -222,7 +225,7 @@ def delete_problem(problem_id):
     return redirect(url_for("dashboard"))
 
 
-# --- MAIN (utile per debug locale) ---
+# --- MAIN ---
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
