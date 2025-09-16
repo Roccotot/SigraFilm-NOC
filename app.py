@@ -2,20 +2,17 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# usa il tuo models.py (corretto con __tablename__ = "users")
+# usa il tuo models.py
 from models import db, User
 
-# ---------------------------
-# Configurazione applicazione
-# ---------------------------
 app = Flask(__name__)
 
-# Normalizza DATABASE_URL (Render a volte usa postgres:// → serve postgresql://)
+# ---------------------------
+# Config DB
+# ---------------------------
 raw_db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db")
 if raw_db_url.startswith("postgres://"):
     raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
-
-# Aggiungi sslmode=require se manca (Render lo richiede)
 if raw_db_url.startswith("postgresql://") and "render.com" in raw_db_url and "sslmode=" not in raw_db_url:
     sep = "&" if "?" in raw_db_url else "?"
     raw_db_url = f"{raw_db_url}{sep}sslmode=require"
@@ -24,11 +21,10 @@ app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SECRET_KEY", "devsecret")
 
-# Inizializza il DB
 db.init_app(app)
 
 # ---------------------------
-# Rotte base
+# Routes base
 # ---------------------------
 @app.route("/")
 def index():
@@ -36,9 +32,6 @@ def index():
         return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
 
-# ---------------------------
-# Login / Logout
-# ---------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -61,9 +54,6 @@ def logout():
     flash("Logout effettuato", "info")
     return redirect(url_for("login"))
 
-# ---------------------------
-# Dashboard
-# ---------------------------
 @app.route("/dashboard")
 def dashboard():
     if "user_id" not in session:
@@ -71,7 +61,7 @@ def dashboard():
     return render_template("dashboard.html")
 
 # ---------------------------
-# Gestione utenti (solo admin)
+# Gestione utenti
 # ---------------------------
 def require_admin():
     if session.get("role") != "admin":
@@ -95,25 +85,18 @@ def users():
             flash("Username già in uso.", "warning")
             return redirect(url_for("users"))
 
-        u = User(
-            username=username,
-            role=role,
-            password_hash=generate_password_hash(password)
-        )
+        u = User(username=username, role=role, password_hash=generate_password_hash(password))
         db.session.add(u)
         db.session.commit()
         flash("Utente creato con successo.", "success")
         return redirect(url_for("users"))
 
-    users_list = db.session.execute(
-        db.select(User).order_by(User.id.asc())
-    ).scalars().all()
+    users_list = db.session.execute(db.select(User).order_by(User.id.asc())).scalars().all()
     return render_template("users.html", users=users_list)
 
 @app.route("/users/<int:user_id>/reset", methods=["POST"])
 def reset_password(user_id):
     require_admin()
-
     new_password = (request.form.get("new_password") or "").strip()
     if len(new_password) < 8:
         flash("La nuova password deve avere almeno 8 caratteri.", "danger")
@@ -131,7 +114,6 @@ def reset_password(user_id):
 @app.route("/users/<int:user_id>/delete", methods=["POST"])
 def delete_user(user_id):
     require_admin()
-
     if session.get("user_id") == user_id:
         flash("Non puoi eliminare il tuo stesso utente mentre sei loggato.", "warning")
         return redirect(url_for("users"))
@@ -147,19 +129,18 @@ def delete_user(user_id):
     return redirect(url_for("users"))
 
 # ---------------------------
-# Health e debug
+# Debug
 # ---------------------------
 @app.route("/healthz")
 def healthz():
     try:
         total_users = db.session.execute(db.select(db.func.count()).select_from(User)).scalar() or 0
-        return jsonify(status="ok", db=app.config["SQLALCHEMY_DATABASE_URI"], users=total_users)
+        return jsonify(status="ok", users=total_users)
     except Exception as e:
         return jsonify(status="error", error=str(e)), 500
 
 @app.route("/debug_login")
 def debug_login():
-    """Verifica se l'utente admin esiste e se la password Password123! funziona"""
     u = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
     if not u:
         return {"found": False}, 404
@@ -171,7 +152,7 @@ def debug_login():
     }
 
 # ---------------------------
-# Main (sviluppo locale)
+# Main
 # ---------------------------
 if __name__ == "__main__":
     with app.app_context():
