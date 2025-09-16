@@ -14,13 +14,16 @@
       <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
         <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
       </a>
+
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
         <span class="navbar-toggler-icon"></span>
       </button>
+
       <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
         <a class="navbar-brand d-none d-lg-block mx-auto" href="#">
           <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
         </a>
+
         <div class="d-flex">
           {% if session.get("role") == "admin" %}
             <a href="{{ url_for('users') }}" class="btn btn-outline-light me-2">Gestione Utenti</a>
@@ -37,9 +40,9 @@
     <div class="card shadow-sm mb-4">
       <div class="card-body">
         <h5 class="card-title">Segnala un problema</h5>
-        <form method="post" action="{{ url_for('add_problem') }}">
+        <form method="post" action="{{ url_for('dashboard') }}">
           <div class="row g-3">
-            <div class="col-12 col-md-4">
+            <div class="col-12 col-md-3">
               <input type="text" name="cinema" class="form-control" placeholder="Cinema" required>
             </div>
             <div class="col-12 col-md-6">
@@ -52,9 +55,9 @@
                 <option value="Critico">Critico</option>
               </select>
             </div>
-          </div>
-          <div class="mt-3">
-            <button type="submit" class="btn btn-primary">Aggiungi</button>
+            <div class="col-12 col-md-1">
+              <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
+            </div>
           </div>
         </form>
       </div>
@@ -69,7 +72,7 @@
             <tr>
               <th>ID</th>
               <th>Cinema</th>
-              <th>Descrizione</th>
+              <th>Tipo</th>
               <th>Urgenza</th>
               <th>Stato</th>
               <th>Autore</th>
@@ -93,7 +96,7 @@
               <td>{{ p.urgenza }}</td>
               <td>{{ p.stato }}</td>
               <td>{{ p.autore }}</td>
-              <td>{{ p.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+              <td>{{ p.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
               {% if session.get("role") == "admin" %}
               <td class="text-nowrap">
                 <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
