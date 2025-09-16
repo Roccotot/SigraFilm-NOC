@@ -1,73 +1,91 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, abort
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
 import os
+from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
 
-# --- CONFIG ---
+# usa il tuo models.py (già corretto con __tablename__ = "users" e password_hash Text)
+from models import db, User
+
+# ---------------------------
+# Configurazione applicazione
+# ---------------------------
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///app.db")
+
+# Normalizza DATABASE_URL (Render a volte fornisce postgres://; SQLAlchemy vuole postgresql://)
+raw_db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db")
+if raw_db_url.startswith("postgres://"):
+    raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
+
+# Assicura sslmode=require per Render se manca
+if raw_db_url.startswith("postgresql://") and "render.com" in raw_db_url and "sslmode=" not in raw_db_url:
+    sep = "&" if "?" in raw_db_url else "?"
+    raw_db_url = f"{raw_db_url}{sep}sslmode=require"
+
+app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SECRET_KEY", "devsecret")
 
-db = SQLAlchemy(app)
+# Inizializza il DB con il modello esterno
+db.init_app(app)
 
-# --- MODELLO ---
-class User(db.Model):
-    __tablename__ = "users"   # 👈 forza l’uso della tabella giusta
-
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.Text, nullable=False)  # meglio Text per non tagliare gli hash lunghi
-    role = db.Column(db.String(20), default="user")
-
-
-# --- HOME ---
+# ---------------------------
+# Rotte base
+# ---------------------------
 @app.route("/")
 def index():
     if "user_id" in session:
         return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
 
-# --- LOGIN ---
+# ---------------------------
+# Login / Logout
+# ---------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"].strip()
-        password = request.form["password"]
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
 
+        # legge dalla tabella "users" grazie al modello in models.py
         u = db.session.execute(db.select(User).filter_by(username=username)).scalar()
         if u and check_password_hash(u.password_hash, password):
             session["user_id"] = u.id
             session["role"] = u.role
             flash("Login effettuato", "success")
             return redirect(url_for("dashboard"))
+
         flash("Credenziali non valide", "danger")
     return render_template("login.html")
 
-# --- LOGOUT ---
 @app.route("/logout")
 def logout():
     session.clear()
     flash("Logout effettuato", "info")
     return redirect(url_for("login"))
 
-# --- DASHBOARD ---
+# ---------------------------
+# Dashboard
+# ---------------------------
 @app.route("/dashboard")
 def dashboard():
     if "user_id" not in session:
         return redirect(url_for("login"))
     return render_template("dashboard.html")
 
-# --- UTENTI: LISTA + CREA ---
+# ---------------------------
+# Gestione utenti (solo admin)
+# ---------------------------
+def require_admin():
+    if session.get("role") != "admin":
+        abort(403, description="Accesso negato (solo admin)")
+
 @app.route("/users", methods=["GET", "POST"])
 def users():
-    if session.get("role") != "admin":
-        return "Accesso negato", 403
+    require_admin()
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        role = request.form.get("role", "user")
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        role = (request.form.get("role") or "user").strip() or "user"
 
         if not username or len(password) < 8:
             flash("Username obbligatorio e password di almeno 8 caratteri.", "danger")
@@ -78,8 +96,11 @@ def users():
             flash("Username già in uso.", "warning")
             return redirect(url_for("users"))
 
-        u = User(username=username, role=role,
-                 password_hash=generate_password_hash(password))
+        u = User(
+            username=username,
+            role=role,
+            password_hash=generate_password_hash(password)
+        )
         db.session.add(u)
         db.session.commit()
         flash("Utente creato con successo.", "success")
@@ -90,13 +111,11 @@ def users():
     ).scalars().all()
     return render_template("users.html", users=users_list)
 
-# --- RESET PASSWORD ---
 @app.route("/users/<int:user_id>/reset", methods=["POST"])
 def reset_password(user_id):
-    if session.get("role") != "admin":
-        return "Accesso negato", 403
+    require_admin()
 
-    new_password = request.form.get("new_password", "").strip()
+    new_password = (request.form.get("new_password") or "").strip()
     if len(new_password) < 8:
         flash("La nuova password deve avere almeno 8 caratteri.", "danger")
         return redirect(url_for("users"))
@@ -110,11 +129,9 @@ def reset_password(user_id):
     flash(f"Password di '{u.username}' aggiornata con successo.", "success")
     return redirect(url_for("users"))
 
-# --- ELIMINA UTENTE ---
 @app.route("/users/<int:user_id>/delete", methods=["POST"])
 def delete_user(user_id):
-    if session.get("role") != "admin":
-        return "Accesso negato", 403
+    require_admin()
 
     if session.get("user_id") == user_id:
         flash("Non puoi eliminare il tuo stesso utente mentre sei loggato.", "warning")
@@ -130,7 +147,20 @@ def delete_user(user_id):
     flash(f"Utente '{username}' eliminato.", "success")
     return redirect(url_for("users"))
 
-# --- MAIN (utile per debug locale) ---
+# ---------------------------
+# Health / debug minimale
+# ---------------------------
+@app.route("/healthz")
+def healthz():
+    try:
+        total_users = db.session.execute(db.select(db.func.count()).select_from(User)).scalar() or 0
+        return jsonify(status="ok", db=app.config["SQLALCHEMY_DATABASE_URI"], users=total_users)
+    except Exception as e:
+        return jsonify(status="error", error=str(e), db=app.config.get("SQLALCHEMY_DATABASE_URI")), 500
+
+# ---------------------------
+# Main (sviluppo locale)
+# ---------------------------
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
