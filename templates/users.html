@@ -1,141 +1,90 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <title>Gestione Utenti</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <meta charset="UTF-8">
+  <title>Gestione Utenti - SigraFilm</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
+<body class="bg-light">
+
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand" href="{{ url_for('dashboard') }}">SigraFilm NOC</a>
+      <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+        <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="40">
+      </a>
       <div class="d-flex">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light me-2">Dashboard</a>
         <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
       </div>
     </div>
   </nav>
 
-  <div class="container py-4">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="mb-3">
-          {% for category, message in messages %}
-            <div class="alert alert-{{ category }} mb-2">{{ message }}</div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
+  <div class="container mt-4">
 
-    <h1 class="h3 mb-3">Gestione Utenti</h1>
+    <h2 class="mb-3">Gestione Utenti</h2>
 
-    <!-- CREA NUOVO UTENTE -->
-    <div class="card mb-4">
-      <div class="card-header">Crea nuovo utente</div>
+    <!-- Form per aggiungere un nuovo utente -->
+    <div class="card shadow-sm mb-4">
       <div class="card-body">
-        <form method="POST" action="{{ url_for('users') }}">
-          <div class="row g-3 align-items-end">
-            <div class="col-md-4">
-              <label class="form-label">Username</label>
-              <input name="username" class="form-control" required />
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Password</label>
-              <div class="input-group">
-                <input id="newUserPassword" name="password" type="password" class="form-control" minlength="8" required />
-                <button type="button" class="btn btn-outline-secondary" onclick="togglePwd('newUserPassword', this)">Mostra</button>
-              </div>
-              <div class="form-text">Minimo 8 caratteri.</div>
+        <h5 class="card-title">Aggiungi Utente</h5>
+        <form method="post" action="{{ url_for('add_user') }}">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <input type="text" name="username" class="form-control" placeholder="Username" required>
             </div>
             <div class="col-md-3">
-              <label class="form-label">Ruolo</label>
+              <input type="password" name="password" class="form-control" placeholder="Password" required>
+            </div>
+            <div class="col-md-3">
               <select name="role" class="form-select">
-                <option value="user">user</option>
-                <option value="admin">admin</option>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
               </select>
             </div>
-            <div class="col-md-1 d-grid">
-              <button class="btn btn-primary">Crea</button>
+            <div class="col-md-3">
+              <button type="submit" class="btn btn-success w-100">Aggiungi</button>
             </div>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- TABELLA UTENTI -->
-    <div class="table-responsive">
-      <table class="table table-striped align-middle">
-        <thead class="table-dark">
-          <tr>
-            <th style="width: 80px">ID</th>
-            <th>Username</th>
-            <th style="width: 120px">Ruolo</th>
-            <th style="width: 260px">Azioni</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for u in users %}
-          <tr>
-            <td>{{ u.id }}</td>
-            <td>{{ u.username }}</td>
-            <td>{{ u.role }}</td>
-            <td class="d-flex gap-2">
-              <!-- Bottone modal reset password -->
-              <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#resetModal-{{ u.id }}">
-                Reimposta password
-              </button>
+    <!-- Tabella utenti -->
+    {% if users %}
+      <div class="table-responsive">
+        <table class="table table-striped table-hover shadow-sm">
+          <thead class="table-dark">
+            <tr>
+              <th>ID</th>
+              <th>Username</th>
+              <th>Ruolo</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td>{{ u.id }}</td>
+              <td>{{ u.username }}</td>
+              <td>{{ u.role }}</td>
+              <td class="text-nowrap">
+                <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Eliminare questo utente?')">🗑</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info">Nessun utente registrato</div>
+    {% endif %}
 
-              <!-- Elimina utente -->
-              <form method="POST" action="{{ url_for('delete_user', user_id=u.id) }}"
-                    onsubmit="return confirm('Confermi l\\'eliminazione di {{ u.username }}?');">
-                <button class="btn btn-sm btn-danger">Elimina</button>
-              </form>
-
-              <!-- MODAL RESET -->
-              <div class="modal fade" id="resetModal-{{ u.id }}" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog">
-                  <div class="modal-content">
-                    <form method="POST" action="{{ url_for('reset_password', user_id=u.id) }}">
-                      <div class="modal-header">
-                        <h5 class="modal-title">Reimposta password — {{ u.username }}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
-                      </div>
-                      <div class="modal-body">
-                        <label class="form-label">Nuova password</label>
-                        <div class="input-group">
-                          <input id="pwd-{{ u.id }}" name="new_password" type="password" class="form-control" minlength="8" required />
-                          <button type="button" class="btn btn-outline-secondary" onclick="togglePwd('pwd-{{ u.id }}', this)">Mostra</button>
-                        </div>
-                        <div class="form-text">Minimo 8 caratteri.</div>
-                      </div>
-                      <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                        <button class="btn btn-success">Salva nuova password</button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              </div>
-              <!-- /MODAL -->
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
-    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mt-3">← Torna alla Dashboard</a>
   </div>
 
-  <script>
-    function togglePwd(id, btn) {
-      const inp = document.getElementById(id);
-      if (!inp) return;
-      const isPwd = inp.type === 'password';
-      inp.type = isPwd ? 'text' : 'password';
-      btn.textContent = isPwd ? 'Nascondi' : 'Mostra';
-    }
-  </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
