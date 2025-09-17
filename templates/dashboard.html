@@ -5,57 +5,35 @@
   <title>Dashboard - SigraFilm</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body.dark-mode {
-      background-color: #121212;
-      color: #e0e0e0;
-    }
-    .dark-mode .navbar {
-      background-color: #1e1e1e !important;
-    }
-    .dark-mode .card,
-    .dark-mode .table {
-      background-color: #1e1e1e;
-      color: #e0e0e0;
-    }
-    .dark-mode .table thead {
-      background-color: #333;
-      color: #fff;
-    }
-    .dark-mode .form-control,
-    .dark-mode .form-select {
-      background-color: #2a2a2a;
-      color: #fff;
-      border: 1px solid #444;
-    }
-    th.sortable {
-      cursor: pointer;
-    }
-    th.sortable:hover {
-      text-decoration: underline;
-    }
-  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
 </head>
 <body>
 
-  <!-- Navbar -->
+  <!-- Navbar responsive con logo -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
-        <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
+      <!-- Logo mobile -->
+      <a class="navbar-brand d-lg-none" href="https://sigrafilm.com/" target="_blank">
+        <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="40">
       </a>
+
+      <!-- Bottone hamburger -->
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
         <span class="navbar-toggler-icon"></span>
       </button>
+
+      <!-- Contenuto navbar -->
       <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-        <a class="navbar-brand d-none d-lg-block mx-auto" href="#">
+        <!-- Logo desktop -->
+        <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
           <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
         </a>
-        <div class="d-flex align-items-center gap-2">
-          <!-- Toggle Dark Mode -->
-          <button id="darkModeToggle" class="btn btn-outline-light">🌙</button>
+
+        <div class="d-flex">
           {% if session.get("role") == "admin" %}
-            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light me-2">Gestione Utenti</a>
+            <a href="{{ url_for('users') }}" class="btn btn-outline-light me-2">Gestione Utenti</a>
           {% endif %}
           <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
         </div>
@@ -85,13 +63,6 @@
               </select>
             </div>
             <div class="col-12 col-md-2">
-              <select name="stato" class="form-select">
-                <option value="Aperto">Aperto</option>
-                <option value="In corso">In corso</option>
-                <option value="Chiuso">Chiuso</option>
-              </select>
-            </div>
-            <div class="col-12 col-md-1">
               <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
             </div>
           </div>
@@ -99,42 +70,20 @@
       </div>
     </div>
 
-    <!-- Filtro -->
-    <div class="mb-3">
-      <form method="get" class="row g-2">
-        <div class="col-md-3">
-          <select name="filter_urgenza" class="form-select" onchange="this.form.submit()">
-            <option value="">-- Filtra per urgenza --</option>
-            <option value="Non urgente" {% if filter_urgenza=='Non urgente' %}selected{% endif %}>Non urgente</option>
-            <option value="Urgente" {% if filter_urgenza=='Urgente' %}selected{% endif %}>Urgente</option>
-            <option value="Critico" {% if filter_urgenza=='Critico' %}selected{% endif %}>Critico</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <select name="filter_stato" class="form-select" onchange="this.form.submit()">
-            <option value="">-- Filtra per stato --</option>
-            <option value="Aperto" {% if filter_stato=='Aperto' %}selected{% endif %}>Aperto</option>
-            <option value="In corso" {% if filter_stato=='In corso' %}selected{% endif %}>In corso</option>
-            <option value="Chiuso" {% if filter_stato=='Chiuso' %}selected{% endif %}>Chiuso</option>
-          </select>
-        </div>
-      </form>
-    </div>
-
     <!-- Tabella problemi -->
     <h2 class="mb-3">Problemi</h2>
     {% if problems %}
       <div class="table-responsive">
-        <table class="table table-striped table-hover shadow-sm" id="problemsTable">
+        <table id="problemsTable" class="table table-striped table-hover shadow-sm">
           <thead class="table-dark">
             <tr>
-              <th class="sortable" onclick="sortTable(0)">ID</th>
-              <th class="sortable" onclick="sortTable(1)">Cinema</th>
-              <th class="sortable" onclick="sortTable(2)">Descrizione</th>
-              <th class="sortable" onclick="sortTable(3)">Urgenza</th>
-              <th class="sortable" onclick="sortTable(4)">Stato</th>
-              <th class="sortable" onclick="sortTable(5)">Autore</th>
-              <th class="sortable" onclick="sortTable(6)">Data/Ora</th>
+              <th>ID</th>
+              <th>Cinema</th>
+              <th>Tipo</th>
+              <th>Urgenza</th>
+              <th>Stato</th>
+              <th>Autore</th>
+              <th>Data/Ora</th>
               {% if session.get("role") == "admin" %}
                 <th>Azioni</th>
               {% endif %}
@@ -154,8 +103,8 @@
               <td>{{ p.urgenza }}</td>
               <td>{{ p.stato }}</td>
               <td>{{ p.autore }}</td>
-              <td>{{ p.data_ora.strftime("%d/%m/%Y %H:%M") }}</td>
-              {% if session.get("role") == "admin" or session.get("username") == p.autore %}
+              <td>{{ p.data_ora.strftime('%d/%m/%Y %H:%M') if p.data_ora else '' }}</td>
+              {% if session.get("role") == "admin" %}
               <td class="text-nowrap">
                 <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
                 <form method="post" action="{{ url_for('delete_problem', problem_id=p.id) }}" class="d-inline">
@@ -175,70 +124,14 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // Dark Mode toggle con localStorage
-    const toggleBtn = document.getElementById("darkModeToggle");
-    const currentMode = localStorage.getItem("darkMode");
-
-    if (currentMode === "enabled") {
-      document.body.classList.add("dark-mode");
-      toggleBtn.textContent = "☀️";
-    }
-
-    toggleBtn.addEventListener("click", () => {
-      document.body.classList.toggle("dark-mode");
-      if (document.body.classList.contains("dark-mode")) {
-        localStorage.setItem("darkMode", "enabled");
-        toggleBtn.textContent = "☀️";
-      } else {
-        localStorage.setItem("darkMode", "disabled");
-        toggleBtn.textContent = "🌙";
-      }
+    $(document).ready(function () {
+      $('#problemsTable').DataTable({
+        order: [[6, 'desc']], // ordina per Data/Ora
+        language: {
+          url: "//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json"
+        }
+      });
     });
-
-    // Funzione ordinamento tabella
-    function sortTable(n) {
-      const table = document.getElementById("problemsTable");
-      let switching = true;
-      let dir = "asc";
-      let switchcount = 0;
-
-      while (switching) {
-        switching = false;
-        let rows = table.rows;
-        for (let i = 1; i < (rows.length - 1); i++) {
-          let shouldSwitch = false;
-          let x = rows[i].getElementsByTagName("TD")[n];
-          let y = rows[i + 1].getElementsByTagName("TD")[n];
-
-          let xContent = x.textContent || x.innerText;
-          let yContent = y.textContent || y.innerText;
-
-          if (!isNaN(Date.parse(xContent)) && !isNaN(Date.parse(yContent))) {
-            xContent = new Date(xContent);
-            yContent = new Date(yContent);
-          }
-
-          if (dir === "asc" && xContent > yContent) {
-            shouldSwitch = true;
-            break;
-          }
-          if (dir === "desc" && xContent < yContent) {
-            shouldSwitch = true;
-            break;
-          }
-        }
-        if (shouldSwitch) {
-          rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-          switching = true;
-          switchcount++;
-        } else {
-          if (switchcount === 0 && dir === "asc") {
-            dir = "desc";
-            switching = true;
-          }
-        }
-      }
-    }
   </script>
 </body>
 </html>
