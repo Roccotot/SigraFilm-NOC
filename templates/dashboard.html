@@ -77,9 +77,7 @@
               <th>Stato</th>
               <th>Autore</th>
               <th>Data/Ora</th>
-              {% if session.get("role") == "admin" %}
-                <th>Azioni</th>
-              {% endif %}
+              <th>Azioni</th>
             </tr>
           </thead>
           <tbody>
@@ -97,14 +95,16 @@
               <td>{{ p.stato }}</td>
               <td>{{ p.autore }}</td>
               <td>{{ p.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
-              {% if session.get("role") == "admin" %}
               <td class="text-nowrap">
-                <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
-                <form method="post" action="{{ url_for('delete_problem', problem_id=p.id) }}" class="d-inline">
-                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Eliminare questo problema?')">🗑</button>
-                </form>
+                {% if session.get("role") == "admin" or p.autore == session.get("username") %}
+                  <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
+                  <form method="post" action="{{ url_for('delete_problem', problem_id=p.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Eliminare questo problema?')">🗑</button>
+                  </form>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
               </td>
-              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
