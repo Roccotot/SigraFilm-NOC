@@ -127,14 +127,16 @@
               <td>{{ p.stato }}</td>
               <td>{{ p.autore }}</td>
               <td>{{ p.data_ora.strftime('%d/%m/%Y %H:%M') if p.data_ora else '' }}</td>
-              {% if session.get("role") == "admin" %}
-              <td class="text-nowrap">
-                <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
-                <form method="post" action="{{ url_for('delete_problem', problem_id=p.id) }}" class="d-inline">
-                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Eliminare questo problema?')">🗑</button>
-                </form>
-              </td>
-              {% endif %}
+             <td class="text-nowrap">
+  {% if session.get("role") == "admin" or session.get("username") == p.autore %}
+    <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
+  {% endif %}
+  {% if session.get("role") == "admin" %}
+    <form method="post" action="{{ url_for('delete_problem', problem_id=p.id) }}" class="d-inline">
+      <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Eliminare questo problema?')">🗑</button>
+    </form>
+  {% endif %}
+</td>
             </tr>
             {% endfor %}
           </tbody>
