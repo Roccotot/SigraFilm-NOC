@@ -2,59 +2,47 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <title>Gestione Utenti - SigraFilm</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestione Utenti</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="{{ url_for('dashboard') }}">
-        <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="40">
-      </a>
-      <div class="d-flex">
-        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light me-2">Dashboard</a>
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
-      </div>
-    </div>
-  </nav>
+<div class="container mt-4">
+  <h2 class="mb-3">Gestione Utenti</h2>
 
-  <div class="container mt-4">
-
-    <h2 class="mb-3">Gestione Utenti</h2>
-
-    <!-- Form per aggiungere un nuovo utente -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-body">
-        <h5 class="card-title">Aggiungi Utente</h5>
-        <form method="post" action="{{ url_for('add_user') }}">
-          <div class="row g-3">
-            <div class="col-md-3">
-              <input type="text" name="username" class="form-control" placeholder="Username" required>
-            </div>
-            <div class="col-md-3">
-              <input type="password" name="password" class="form-control" placeholder="Password" required>
-            </div>
-            <div class="col-md-3">
-              <select name="role" class="form-select">
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <button type="submit" class="btn btn-success w-100">Aggiungi</button>
-            </div>
+  <!-- Form aggiunta nuovo utente -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Aggiungi Nuovo Utente</h5>
+      <form method="post" action="{{ url_for('admin_users') }}">
+        <div class="row g-2">
+          <div class="col-md-3">
+            <input type="text" name="username" class="form-control" placeholder="Username" required>
           </div>
-        </form>
-      </div>
+          <div class="col-md-3">
+            <input type="password" name="password" class="form-control" placeholder="Password (min 8 caratteri)" required>
+          </div>
+          <div class="col-md-3">
+            <select name="role" class="form-select">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
+          </div>
+        </div>
+      </form>
     </div>
+  </div>
 
-    <!-- Tabella utenti -->
-    {% if users %}
+  <!-- Tabella utenti -->
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h5 class="card-title">Utenti Registrati</h5>
+      {% if users %}
       <div class="table-responsive">
-        <table class="table table-striped table-hover shadow-sm">
+        <table class="table table-striped table-hover">
           <thead class="table-dark">
             <tr>
               <th>ID</th>
@@ -70,8 +58,15 @@
               <td>{{ u.username }}</td>
               <td>{{ u.role }}</td>
               <td class="text-nowrap">
+                <!-- Reset password -->
+                <form method="post" action="{{ url_for('reset_password', user_id=u.id) }}" class="d-inline">
+                  <input type="password" name="new_password" placeholder="Nuova password" minlength="8" required class="form-control d-inline w-auto">
+                  <button type="submit" class="btn btn-sm btn-warning">Reset</button>
+                </form>
+
+                <!-- Elimina utente -->
                 <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}" class="d-inline">
-                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Eliminare questo utente?')">🗑</button>
+                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Eliminare questo utente?')">Elimina</button>
                 </form>
               </td>
             </tr>
@@ -79,12 +74,14 @@
           </tbody>
         </table>
       </div>
-    {% else %}
-      <div class="alert alert-info">Nessun utente registrato</div>
-    {% endif %}
-
+      {% else %}
+        <div class="alert alert-info">Nessun utente registrato.</div>
+      {% endif %}
+    </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mt-3">Torna alla Dashboard</a>
+</div>
+
 </body>
 </html>
