@@ -84,7 +84,13 @@ def dashboard():
         flash("Problema aggiunto con successo.", "success")
         return redirect(url_for("dashboard"))
 
-    problems = Problem.query.order_by(Problem.created_at.desc()).all()
+    # 👇 Admin vede tutti i problemi, user solo i propri
+    if session.get("role") == "admin":
+        problems = Problem.query.order_by(Problem.created_at.desc()).all()
+    else:
+        autore = User.query.get(session["user_id"]).username
+        problems = Problem.query.filter_by(autore=autore).order_by(Problem.created_at.desc()).all()
+
     return render_template("dashboard.html", problems=problems)
 
 # --- MODIFICA PROBLEMA ---
@@ -94,6 +100,10 @@ def edit_problem(problem_id):
         return redirect(url_for("login"))
 
     p = Problem.query.get_or_404(problem_id)
+
+    # 👇 Solo autore o admin possono modificare
+    if session.get("role") != "admin" and p.autore != User.query.get(session["user_id"]).username:
+        abort(403)
 
     if request.method == "POST":
         p.cinema = request.form.get("cinema", p.cinema).strip()
@@ -113,6 +123,11 @@ def delete_problem(problem_id):
         return redirect(url_for("login"))
 
     p = Problem.query.get_or_404(problem_id)
+
+    # 👇 Solo autore o admin possono eliminare
+    if session.get("role") != "admin" and p.autore != User.query.get(session["user_id"]).username:
+        abort(403)
+
     db.session.delete(p)
     db.session.commit()
     flash("Problema eliminato.", "success")
