@@ -4,15 +4,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
 
-# --- CONFIG ---
+# --- CONFIGURAZIONE ---
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    "DATABASE_URL", "sqlite:///app.db"
-)
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///app.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SECRET_KEY", "devsecret")
 
-# 🔍 DEBUG: mostra a quale DB è connesso
+# DEBUG: stampa database usato
 print("📦 DATABASE CONNESSO:", app.config["SQLALCHEMY_DATABASE_URI"])
 
 db = SQLAlchemy(app)
@@ -20,7 +18,6 @@ db = SQLAlchemy(app)
 # --- MODELLI ---
 class User(db.Model):
     __tablename__ = "users"
-
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.Text, nullable=False)
@@ -29,10 +26,8 @@ class User(db.Model):
     def __repr__(self):
         return f"<User {self.username}>"
 
-
 class Problem(db.Model):
     __tablename__ = "problems"
-
     id = db.Column(db.Integer, primary_key=True)
     cinema = db.Column(db.String(100), nullable=False)
     tipo = db.Column(db.Text, nullable=False)
@@ -44,14 +39,22 @@ class Problem(db.Model):
     def __repr__(self):
         return f"<Problem {self.id} - {self.tipo[:20]}>"
 
+# --- CREAZIONE AUTOMATICA TABELLE + ADMIN ---
+with app.app_context():
+    db.create_all()
+    admin = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
+    if not admin:
+        admin = User(username="admin", password_hash=generate_password_hash("admin1234"), role="admin")
+        db.session.add(admin)
+        db.session.commit()
+        print("✅ Utente admin creato automaticamente (username: admin / password: admin1234)")
 
-# --- HOME ---
+# --- ROUTES ---
 @app.route("/")
 def index():
     if "user_id" in session:
         return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
-
 
 # --- LOGIN ---
 @app.route("/login", methods=["GET", "POST"])
@@ -71,14 +74,12 @@ def login():
         flash("Credenziali non valide", "danger")
     return render_template("login.html")
 
-
 # --- LOGOUT ---
 @app.route("/logout")
 def logout():
     session.clear()
     flash("Logout effettuato", "info")
     return redirect(url_for("login"))
-
 
 # --- DASHBOARD ---
 @app.route("/dashboard")
@@ -90,11 +91,8 @@ def dashboard():
     filter_stato = request.args.get("filter_stato", "")
 
     query = Problem.query
-
-    # 🔐 Gli utenti vedono solo i loro problemi, admin vede tutto
     if session["role"] != "admin":
         query = query.filter_by(autore=session["username"])
-
     if filter_urgenza:
         query = query.filter_by(urgenza=filter_urgenza)
     if filter_stato:
@@ -108,7 +106,6 @@ def dashboard():
         filter_urgenza=filter_urgenza,
         filter_stato=filter_stato
     )
-
 
 # --- AGGIUNGI PROBLEMA ---
 @app.route("/problems/add", methods=["POST"])
@@ -137,7 +134,6 @@ def add_problem():
     flash("Problema aggiunto con successo.", "success")
     return redirect(url_for("dashboard"))
 
-
 # --- MODIFICA PROBLEMA ---
 @app.route("/problems/<int:problem_id>/edit", methods=["GET", "POST"])
 def edit_problem(problem_id):
@@ -148,7 +144,6 @@ def edit_problem(problem_id):
     if not p:
         abort(404)
 
-    # 🔐 Solo admin o autore possono modificare
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
 
@@ -163,7 +158,6 @@ def edit_problem(problem_id):
 
     return render_template("edit_problem.html", problem=p)
 
-
 # --- ELIMINA PROBLEMA ---
 @app.route("/problems/<int:problem_id>/delete", methods=["POST"])
 def delete_problem(problem_id):
@@ -174,7 +168,6 @@ def delete_problem(problem_id):
     if not p:
         abort(404)
 
-    # 🔐 Solo admin o autore possono eliminare
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
 
@@ -183,8 +176,7 @@ def delete_problem(problem_id):
     flash("Problema eliminato.", "success")
     return redirect(url_for("dashboard"))
 
-
-# --- GESTIONE UTENTI (solo admin) ---
+# --- GESTIONE UTENTI ---
 @app.route("/users", methods=["GET", "POST"])
 def admin_users():
     if session.get("role") != "admin":
@@ -213,7 +205,6 @@ def admin_users():
     users_list = db.session.execute(db.select(User).order_by(User.id.asc())).scalars().all()
     return render_template("users.html", users=users_list)
 
-
 # --- RESET PASSWORD ---
 @app.route("/users/<int:user_id>/reset", methods=["POST"])
 def reset_password(user_id):
@@ -234,7 +225,6 @@ def reset_password(user_id):
     flash(f"Password di '{u.username}' aggiornata con successo.", "success")
     return redirect(url_for("admin_users"))
 
-
 # --- ELIMINA UTENTE ---
 @app.route("/users/<int:user_id>/delete", methods=["POST"])
 def delete_user(user_id):
@@ -254,7 +244,6 @@ def delete_user(user_id):
     db.session.commit()
     flash(f"Utente '{username}' eliminato.", "success")
     return redirect(url_for("admin_users"))
-
 
 # --- MAIN ---
 if __name__ == "__main__":
