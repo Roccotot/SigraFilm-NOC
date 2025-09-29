@@ -259,5 +259,20 @@ def delete_user(user_id):
 # --- MAIN ---
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+            print("✅ Tabelle create/verificate con successo.")
+            # 👇 Creiamo un admin iniziale se il DB è vuoto
+            if not db.session.execute(db.select(User)).scalar():
+                admin = User(
+                    username="admin",
+                    password_hash=generate_password_hash("admin1234"),
+                    role="admin"
+                )
+                db.session.add(admin)
+                db.session.commit()
+                print("👤 Utente admin creato: admin / admin1234")
+        except Exception as e:
+            print("❌ Errore nella creazione delle tabelle:", e)
+
     app.run(host="0.0.0.0", port=5000, debug=True)
