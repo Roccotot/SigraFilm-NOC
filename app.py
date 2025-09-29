@@ -239,9 +239,10 @@ def admin_users():
         password = request.form.get("password", "")
         role = request.form.get("role", "user")
 
-        if not username or len(password) < 8:
-            flash("Username obbligatorio e password di almeno 8 caratteri.", "danger")
-            return redirect(url_for("admin_users"))
+if not username or not password:
+    flash("Username e password sono obbligatori.", "danger")
+    return redirect(url_for("admin_users"))
+
 
         existing = db.session.execute(db.select(User).filter_by(username=username)).scalar()
         if existing:
