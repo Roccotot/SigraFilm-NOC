@@ -12,8 +12,10 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SECRET_KEY", "devsecret")
 
-db = SQLAlchemy(app)
+# 🔍 DEBUG: stampa quale database è connesso (lo vedi nei log di Render)
+print("📦 DATABASE CONNESSO:", app.config["SQLALCHEMY_DATABASE_URI"])
 
+db = SQLAlchemy(app)
 
 # --- MODELLI ---
 class User(db.Model):
@@ -62,7 +64,7 @@ def login():
         if u and check_password_hash(u.password_hash, password):
             session["user_id"] = u.id
             session["role"] = u.role
-            session["username"] = u.username  # 🔑 necessario per filtrare problemi
+            session["username"] = u.username
             flash("Login effettuato", "success")
             return redirect(url_for("dashboard"))
 
@@ -89,6 +91,7 @@ def dashboard():
 
     query = Problem.query
 
+    # 🔐 Gli utenti vedono solo i loro problemi, admin vede tutto
     if session["role"] != "admin":
         query = query.filter_by(autore=session["username"])
 
@@ -100,8 +103,10 @@ def dashboard():
     problems = query.order_by(Problem.data_ora.desc()).all()
 
     return render_template(
-        "dashboard.html", problems=problems,
-        filter_urgenza=filter_urgenza, filter_stato=filter_stato
+        "dashboard.html",
+        problems=problems,
+        filter_urgenza=filter_urgenza,
+        filter_stato=filter_stato
     )
 
 
@@ -143,7 +148,7 @@ def edit_problem(problem_id):
     if not p:
         abort(404)
 
-    # Solo admin o autore possono modificare
+    # 🔐 Solo admin o autore possono modificare
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
 
@@ -169,7 +174,7 @@ def delete_problem(problem_id):
     if not p:
         abort(404)
 
-    # Solo admin o autore possono eliminare
+    # 🔐 Solo admin o autore possono eliminare
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
 
