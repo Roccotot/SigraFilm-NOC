@@ -2,9 +2,10 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <title>Dashboard - SigraFilm</title>
+  <title>Dashboard — SigraFilm NOC</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/sorttable@1.0.2/sorttable.min.js"></script>
 </head>
 <body>
@@ -12,22 +13,21 @@
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
-      <a class="navbar-brand d-none d-lg-block mx-auto" href="https://sigrafilm.com/" target="_blank">
-        <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
+      <a class="navbar-brand" href="https://sigrafilm.com/" target="_blank">
+        <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="SigraFilm" height="44">
       </a>
 
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+      <button class="navbar-toggler" type="button"
+        data-bs-toggle="collapse" data-bs-target="#navbarContent">
         <span class="navbar-toggler-icon"></span>
       </button>
 
-      <div class="collapse navbar-collapse justify-content-between" id="navbarContent">
-        <a class="navbar-brand d-none d-lg-block mx-auto" href="#">
-          <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="Logo SigraFilm" height="50">
-        </a>
-
-        <div class="d-flex">
+      <div class="collapse navbar-collapse" id="navbarContent">
+        <div class="ms-auto d-flex gap-2 mt-2 mt-lg-0">
           {% if session.get("role") == "admin" %}
-            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light me-2">Gestione Utenti</a>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light">
+              Gestione Utenti
+            </a>
           {% endif %}
           <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
         </div>
@@ -37,10 +37,19 @@
 
   <div class="container mt-4">
 
-    <!-- Form segnalazione -->
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, msg in messages %}
+          <div class="alert alert-{{ category }} py-2">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Form segnalazione problema -->
     <div class="card shadow-sm mb-4">
       <div class="card-body">
-        <h5 class="card-title">Segnala un problema</h5>
+        <div class="card-title">Segnala problema</div>
         <form method="post" action="{{ url_for('add_problem') }}">
           <div class="row g-3">
             <div class="col-12 col-md-3">
@@ -56,7 +65,7 @@
                 <option value="Critico">Critico</option>
               </select>
             </div>
-            <div class="col-12 col-md-2">
+            <div class="col-12 col-md-2 d-flex align-items-end">
               <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
             </div>
           </div>
@@ -65,42 +74,60 @@
     </div>
 
     <!-- Tabella problemi -->
-    <h2 class="mb-3">Problemi</h2>
+    <h2 class="page-heading">Problemi</h2>
+
     {% if problems %}
       <div class="table-responsive">
-        <table class="table table-striped table-hover shadow-sm sortable">
+        <table class="table table-striped table-hover sortable">
           <thead class="table-dark">
             <tr>
               <th>ID</th>
               <th>Cinema</th>
-              <th>Tipo</th>
+              <th>Descrizione</th>
               <th>Urgenza</th>
               <th>Stato</th>
               <th>Autore</th>
               <th>Data/Ora</th>
-              <th>Azioni</th>
+              <th class="sorttable_nosort" style="cursor:default;">Azioni</th>
             </tr>
           </thead>
           <tbody>
             {% for p in problems %}
-            <tr class="
-              {% if p.urgenza == 'Non urgente' %}table-success
-              {% elif p.urgenza == 'Urgente' %}table-warning
-              {% elif p.urgenza == 'Critico' %}table-danger
-              {% endif %}
-            ">
-              <td>{{ p.id }}</td>
-              <td>{{ p.cinema }}</td>
-              <td>{{ p.tipo }}</td>
-              <td>{{ p.urgenza }}</td>
-              <td>{{ p.stato }}</td>
-              <td>{{ p.autore }}</td>
-              <td>{{ p.data_ora.strftime("%d/%m/%Y %H:%M") }}</td>
+            <tr class="{% if p.urgenza == 'Critico' %}row-critico{% elif p.urgenza == 'Urgente' %}row-urgente{% else %}row-non-urgente{% endif %}">
+              <td style="color:var(--text-3); font-size:.78rem; font-weight:500;">#{{ p.id }}</td>
+              <td style="font-weight:500;">{{ p.cinema }}</td>
+              <td style="max-width:260px; white-space:normal; color:var(--text-2);">{{ p.tipo }}</td>
+              <td>
+                {% if p.urgenza == 'Critico' %}
+                  <span class="nbadge nbadge-critico">Critico</span>
+                {% elif p.urgenza == 'Urgente' %}
+                  <span class="nbadge nbadge-urgente">Urgente</span>
+                {% else %}
+                  <span class="nbadge nbadge-non-urgente">Non urgente</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.stato == 'Aperto' %}
+                  <span class="nbadge nbadge-aperto">Aperto</span>
+                {% elif p.stato == 'In corso' %}
+                  <span class="nbadge nbadge-in-corso">In corso</span>
+                {% else %}
+                  <span class="nbadge nbadge-chiuso">Chiuso</span>
+                {% endif %}
+              </td>
+              <td style="color:var(--text-2); font-size:.82rem;">{{ p.autore }}</td>
+              <td style="color:var(--text-3); font-size:.78rem; white-space:nowrap;">
+                {{ p.data_ora.strftime("%d/%m/%Y %H:%M") }}
+              </td>
               <td class="text-nowrap">
                 {% if session.get("role") == "admin" or session.get("username") == p.autore %}
-                  <a href="{{ url_for('edit_problem', problem_id=p.id) }}" class="btn btn-sm btn-warning">✏</a>
-                  <form method="post" action="{{ url_for('delete_problem', problem_id=p.id) }}" class="d-inline">
-                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Eliminare questo problema?')">🗑</button>
+                  <a href="{{ url_for('edit_problem', problem_id=p.id) }}"
+                    class="btn btn-sm btn-warning me-1">✏</a>
+                  <form method="post"
+                    action="{{ url_for('delete_problem', problem_id=p.id) }}"
+                    class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-danger"
+                      onclick="return confirm('Eliminare questo problema?')">🗑</button>
                   </form>
                 {% endif %}
               </td>
@@ -110,8 +137,9 @@
         </table>
       </div>
     {% else %}
-      <div class="alert alert-info">Nessun problema registrato</div>
+      <div class="alert alert-info">Nessun problema registrato.</div>
     {% endif %}
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
