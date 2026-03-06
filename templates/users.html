@@ -40,22 +40,27 @@
       <div class="card-body">
         <div class="card-title">Aggiungi utente</div>
         <form method="post" action="{{ url_for('admin_users') }}">
-          <div class="row g-2">
+          <div class="row g-2 mb-2">
             <div class="col-12 col-md-3">
-              <input type="text" name="username" class="form-control" placeholder="Username" required>
+              <input type="text" name="username" class="form-control noc-field" placeholder="Username" required autocomplete="off">
             </div>
             <div class="col-12 col-md-3">
-              <input type="password" name="password" class="form-control"
-                placeholder="Password (min 8 caratteri)" required>
+              <input type="password" name="password" class="form-control noc-field" placeholder="Password (min 8 caratteri)" required>
             </div>
-            <div class="col-12 col-md-3">
-              <select name="role" class="form-select">
+            <div class="col-6 col-md-2">
+              <input type="tel" name="telefono" class="form-control noc-field" placeholder="Telefono">
+            </div>
+            <div class="col-6 col-md-2">
+              <input type="email" name="email" class="form-control noc-field" placeholder="Email">
+            </div>
+            <div class="col-8 col-md-1">
+              <select name="role" class="form-select noc-field">
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
-            <div class="col-12 col-md-3 d-flex align-items-end">
-              <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
+            <div class="col-4 col-md-1">
+              <button type="submit" class="btn btn-primary noc-field w-100">+</button>
             </div>
           </div>
         </form>
@@ -75,6 +80,8 @@
               <tr>
                 <th>ID</th>
                 <th>Username</th>
+                <th>Telefono</th>
+                <th>Email</th>
                 <th>Ruolo</th>
                 <th>Azioni</th>
               </tr>
@@ -84,6 +91,8 @@
               <tr>
                 <td style="color:var(--text-3); font-size:.78rem; font-weight:500;">#{{ u.id }}</td>
                 <td style="font-weight:500;">{{ u.username }}</td>
+                <td style="color:var(--text-2); font-size:.82rem;">{{ u.telefono or '—' }}</td>
+                <td style="color:var(--text-2); font-size:.82rem;">{{ u.email or '—' }}</td>
                 <td>
                   {% if u.role == 'admin' %}
                     <span class="nbadge nbadge-admin">Admin</span>

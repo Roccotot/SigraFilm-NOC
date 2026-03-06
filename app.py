@@ -25,6 +25,8 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.Text, nullable=False)
     role = db.Column(db.String(20), default="user")
+    telefono = db.Column(db.String(30), default="")
+    email = db.Column(db.String(120), default="")
 
     def __repr__(self):
         return f"<User {self.username}>"
@@ -70,10 +72,12 @@ with app.app_context():
 
     # Migrazione colonne mancanti (ALTER TABLE sicuro)
     _migrations = [
-        ("problems", "città",   "VARCHAR(100) NOT NULL DEFAULT ''"),
-        ("problems", "sala",    "VARCHAR(20)  NOT NULL DEFAULT '1'"),
-        ("cinemas",  "città",   "VARCHAR(100) NOT NULL DEFAULT ''"),
-        ("cinemas",  "num_sale","INTEGER      NOT NULL DEFAULT 1"),
+        ("problems", "città",    "VARCHAR(100) NOT NULL DEFAULT ''"),
+        ("problems", "sala",     "VARCHAR(20)  NOT NULL DEFAULT '1'"),
+        ("cinemas",  "città",    "VARCHAR(100) NOT NULL DEFAULT ''"),
+        ("cinemas",  "num_sale", "INTEGER      NOT NULL DEFAULT 1"),
+        ("users",    "telefono", "VARCHAR(30)  NOT NULL DEFAULT ''"),
+        ("users",    "email",    "VARCHAR(120) NOT NULL DEFAULT ''"),
     ]
     with db.engine.connect() as conn:
         for table, col, col_def in _migrations:
@@ -343,6 +347,8 @@ def admin_users():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role = request.form.get("role", "user")
+        telefono = request.form.get("telefono", "").strip()
+        email = request.form.get("email", "").strip()
 
         if not username or len(password) < 8:
             flash("Username obbligatorio e password di almeno 8 caratteri.", "danger")
@@ -353,7 +359,8 @@ def admin_users():
             flash("Username già in uso.", "warning")
             return redirect(url_for("admin_users"))
 
-        u = User(username=username, role=role, password_hash=generate_password_hash(password))
+        u = User(username=username, role=role, password_hash=generate_password_hash(password),
+                 telefono=telefono, email=email)
         db.session.add(u)
         db.session.commit()
         flash("Utente creato con successo.", "success")

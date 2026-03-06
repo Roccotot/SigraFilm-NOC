@@ -692,3 +692,11 @@ select:-webkit-autofill {
 .empty-state-sub {
   font-size: .8rem;
 }
+
+/* ─── NOC FORM FIELDS (altezza uniforme) ────────────── */
+.noc-field {
+  height: 2.5rem !important;
+  min-height: 2.5rem !important;
+  padding-top: .375rem;
+  padding-bottom: .375rem;
+}
