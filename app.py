@@ -38,9 +38,19 @@ class Problem(db.Model):
     stato = db.Column(db.String(50), default="Aperto")
     autore = db.Column(db.String(80), nullable=False)
     data_ora = db.Column(db.DateTime, default=datetime.utcnow)
+    comments = db.relationship("Comment", backref="problem", cascade="all, delete-orphan", lazy=True)
 
     def __repr__(self):
         return f"<Problem {self.id} - {self.tipo[:20]}>"
+
+class Comment(db.Model):
+    __tablename__ = "comments"
+    id = db.Column(db.Integer, primary_key=True)
+    problem_id = db.Column(db.Integer, db.ForeignKey("problems.id", ondelete="CASCADE"), nullable=False)
+    autore = db.Column(db.String(80), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="user")
+    testo = db.Column(db.Text, nullable=False)
+    data_ora = db.Column(db.DateTime, default=datetime.utcnow)
 
 # --- CREAZIONE AUTOMATICA TABELLE + ADMIN ---
 with app.app_context():
@@ -93,7 +103,7 @@ def dashboard():
     filter_urgenza = request.args.get("filter_urgenza", "")
     filter_stato = request.args.get("filter_stato", "")
 
-    query = Problem.query
+    query = Problem.query.filter(Problem.stato != "Chiuso")
     if session["role"] != "admin":
         query = query.filter_by(autore=session["username"])
     if filter_urgenza:
@@ -103,8 +113,8 @@ def dashboard():
 
     problems = query.order_by(Problem.data_ora.desc()).all()
 
-    # Stats e cinemas dalla lista non filtrata (scope utente)
-    base_query = Problem.query
+    # Stats e cinemas dalla lista non filtrata (scope utente, escluso chiusi)
+    base_query = Problem.query.filter(Problem.stato != "Chiuso")
     if session["role"] != "admin":
         base_query = base_query.filter_by(autore=session["username"])
     all_problems = base_query.all()
@@ -113,7 +123,7 @@ def dashboard():
         "total":    len(all_problems),
         "aperto":   sum(1 for p in all_problems if p.stato == "Aperto"),
         "in_corso": sum(1 for p in all_problems if p.stato == "In corso"),
-        "chiuso":   sum(1 for p in all_problems if p.stato == "Chiuso"),
+        "chiuso":   0,
         "critico":  sum(1 for p in all_problems if p.urgenza == "Critico"),
     }
     cinemas = sorted(set(p.cinema for p in all_problems if p.cinema))
@@ -126,6 +136,72 @@ def dashboard():
         stats=stats,
         cinemas=cinemas,
     )
+
+# --- DETTAGLIO TICKET ---
+@app.route("/problems/<int:problem_id>", methods=["GET"])
+def ticket_detail(problem_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    p = db.session.get(Problem, problem_id)
+    if not p:
+        abort(404)
+    if session["role"] != "admin" and session["username"] != p.autore:
+        return "Accesso negato", 403
+    comments = Comment.query.filter_by(problem_id=p.id).order_by(Comment.data_ora.asc()).all()
+    return render_template("ticket_detail.html", problem=p, comments=comments)
+
+# --- AGGIUNGI COMMENTO ---
+@app.route("/problems/<int:problem_id>/comment", methods=["POST"])
+def add_comment(problem_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    p = db.session.get(Problem, problem_id)
+    if not p:
+        abort(404)
+    if session["role"] != "admin" and session["username"] != p.autore:
+        return "Accesso negato", 403
+    testo = request.form.get("testo", "").strip()
+    if testo:
+        c = Comment(
+            problem_id=p.id,
+            autore=session["username"],
+            role=session["role"],
+            testo=testo,
+        )
+        db.session.add(c)
+        db.session.commit()
+    return redirect(url_for("ticket_detail", problem_id=p.id) + "#chat-bottom")
+
+# --- AGGIORNA TICKET (stato/urgenza) ---
+@app.route("/problems/<int:problem_id>/update", methods=["POST"])
+def update_ticket(problem_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    p = db.session.get(Problem, problem_id)
+    if not p:
+        abort(404)
+    if session["role"] != "admin" and session["username"] != p.autore:
+        return "Accesso negato", 403
+    nuovo_stato   = request.form.get("stato", p.stato)
+    nuova_urgenza = request.form.get("urgenza", p.urgenza)
+    p.stato   = nuovo_stato
+    p.urgenza = nuova_urgenza
+    db.session.commit()
+    flash("Ticket aggiornato.", "success")
+    if nuovo_stato == "Chiuso":
+        return redirect(url_for("closed_tickets"))
+    return redirect(url_for("ticket_detail", problem_id=p.id))
+
+# --- ARCHIVIO TICKET CHIUSI ---
+@app.route("/closed")
+def closed_tickets():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    query = Problem.query.filter_by(stato="Chiuso")
+    if session["role"] != "admin":
+        query = query.filter_by(autore=session["username"])
+    problems = query.order_by(Problem.data_ora.desc()).all()
+    return render_template("closed_tickets.html", problems=problems)
 
 # --- AGGIUNGI PROBLEMA ---
 @app.route("/problems/add", methods=["POST"])

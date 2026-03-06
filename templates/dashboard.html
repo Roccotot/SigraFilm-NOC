@@ -25,6 +25,7 @@
       <div class="collapse navbar-collapse" id="navbarContent">
         <div class="ms-auto d-flex align-items-center gap-2 mt-2 mt-lg-0">
           <span class="nav-user-chip">{{ session.get("username") }}</span>
+          <a href="{{ url_for('closed_tickets') }}" class="btn btn-outline-light">🗄 Archivio</a>
           {% if session.get("role") == "admin" %}
             <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light">Gestione Utenti</a>
           {% endif %}
@@ -109,9 +110,6 @@
           class="filter-pill filter-pill-aperto {% if filter_stato == 'Aperto' %}active{% endif %}">Aperto</a>
         <a href="?filter_stato=In+corso&filter_urgenza={{ filter_urgenza }}"
           class="filter-pill filter-pill-in-corso {% if filter_stato == 'In corso' %}active{% endif %}">In corso</a>
-        <a href="?filter_stato=Chiuso&filter_urgenza={{ filter_urgenza }}"
-          class="filter-pill filter-pill-chiuso {% if filter_stato == 'Chiuso' %}active{% endif %}">Chiuso</a>
-
         <span class="filter-divider">·</span>
 
         <!-- Filtro urgenza -->
@@ -149,7 +147,12 @@
           <tbody>
             {% for p in problems %}
             <tr class="{% if p.urgenza == 'Critico' %}row-critico{% elif p.urgenza == 'Urgente' %}row-urgente{% else %}row-non-urgente{% endif %}">
-              <td style="color:var(--text-3); font-size:.78rem; font-weight:500;">#{{ p.id }}</td>
+              <td>
+                <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
+                  style="color:var(--text-3); font-size:.78rem; font-weight:600; text-decoration:none;">
+                  #{{ p.id }}
+                </a>
+              </td>
               <td style="font-weight:600;">{{ p.cinema }}</td>
               <td style="max-width:260px; white-space:normal; color:var(--text-2);">{{ p.tipo }}</td>
               <td>
