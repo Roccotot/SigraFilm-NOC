@@ -383,3 +383,102 @@ body.bg-light {
   background-color: var(--bg-base) !important;
   display: block;
 }
+
+/* ─── AUTOFILL FIX (nero su nero) ──────────────────── */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--text-1) !important;
+  -webkit-box-shadow: 0 0 0px 1000px var(--bg-input) inset !important;
+  caret-color: var(--text-1);
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ─── NAV USER CHIP ─────────────────────────────────── */
+.nav-user-chip {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--text-3);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .28rem .7rem;
+  letter-spacing: .03em;
+}
+
+/* ─── STATS BAR ─────────────────────────────────────── */
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .3rem .75rem;
+  border-radius: 8px;
+  font-size: .75rem;
+  font-weight: 600;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.stat-chip-total    { background: rgba(139,148,158,.07); color: var(--text-2);   border-color: rgba(139,148,158,.2);  }
+.stat-chip-aperto   { background: rgba(248,81,73,.08);   color: var(--red);      border-color: rgba(248,81,73,.25);   }
+.stat-chip-in-corso { background: rgba(88,166,255,.08);  color: var(--cyan);     border-color: rgba(88,166,255,.2);   }
+.stat-chip-chiuso   { background: rgba(63,185,80,.08);   color: var(--green);    border-color: rgba(63,185,80,.25);   }
+.stat-chip-critico  { background: rgba(248,81,73,.12);   color: var(--red);      border-color: rgba(248,81,73,.35); font-weight:700; }
+
+/* ─── FILTER PILLS ──────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .3rem;
+}
+.filter-divider {
+  color: var(--border);
+  font-size: 1rem;
+  padding: 0 .1rem;
+  user-select: none;
+}
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: .18rem .6rem;
+  border-radius: 20px;
+  font-size: .7rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  background: transparent;
+  text-decoration: none;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.filter-pill:hover { color: var(--text-1); border-color: var(--text-2); }
+.filter-pill.active { background: var(--bg-input); color: var(--text-1); border-color: var(--text-2); }
+.filter-pill-critico.active    { color: var(--red);    border-color: var(--red);    background: rgba(248,81,73,.08); }
+.filter-pill-urgente.active    { color: var(--yellow); border-color: var(--yellow); background: rgba(227,179,65,.08); }
+.filter-pill-non-urgente.active{ color: var(--green);  border-color: var(--green);  background: rgba(63,185,80,.08); }
+.filter-pill-aperto.active     { color: var(--red);    border-color: var(--red);    background: rgba(248,81,73,.08); }
+.filter-pill-in-corso.active   { color: var(--cyan);   border-color: var(--cyan);   background: rgba(88,166,255,.08); }
+.filter-pill-chiuso.active     { color: var(--green);  border-color: var(--green);  background: rgba(63,185,80,.08); }
+
+/* ─── EMPTY STATE ───────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 3.5rem 1rem;
+  color: var(--text-3);
+}
+.empty-state-icon {
+  font-size: 2.2rem;
+  margin-bottom: .75rem;
+  opacity: .5;
+}
+.empty-state-title {
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: .3rem;
+}
+.empty-state-sub {
+  font-size: .8rem;
+}

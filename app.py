@@ -103,11 +103,28 @@ def dashboard():
 
     problems = query.order_by(Problem.data_ora.desc()).all()
 
+    # Stats e cinemas dalla lista non filtrata (scope utente)
+    base_query = Problem.query
+    if session["role"] != "admin":
+        base_query = base_query.filter_by(autore=session["username"])
+    all_problems = base_query.all()
+
+    stats = {
+        "total":    len(all_problems),
+        "aperto":   sum(1 for p in all_problems if p.stato == "Aperto"),
+        "in_corso": sum(1 for p in all_problems if p.stato == "In corso"),
+        "chiuso":   sum(1 for p in all_problems if p.stato == "Chiuso"),
+        "critico":  sum(1 for p in all_problems if p.urgenza == "Critico"),
+    }
+    cinemas = sorted(set(p.cinema for p in all_problems if p.cinema))
+
     return render_template(
         "dashboard.html",
         problems=problems,
         filter_urgenza=filter_urgenza,
-        filter_stato=filter_stato
+        filter_stato=filter_stato,
+        stats=stats,
+        cinemas=cinemas,
     )
 
 # --- AGGIUNGI PROBLEMA ---
