@@ -33,6 +33,8 @@ class Problem(db.Model):
     __tablename__ = "problems"
     id = db.Column(db.Integer, primary_key=True)
     cinema = db.Column(db.String(100), nullable=False)
+    città = db.Column(db.String(100), nullable=False, default="")
+    sala = db.Column(db.String(20), nullable=False, default="1")
     tipo = db.Column(db.Text, nullable=False)
     urgenza = db.Column(db.String(50), nullable=False)
     stato = db.Column(db.String(50), default="Aperto")
@@ -52,6 +54,16 @@ class Comment(db.Model):
     testo = db.Column(db.Text, nullable=False)
     data_ora = db.Column(db.DateTime, default=datetime.utcnow)
 
+class Cinema(db.Model):
+    __tablename__ = "cinemas"
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+    città = db.Column(db.String(100), nullable=False, default="")
+    num_sale = db.Column(db.Integer, nullable=False, default=1)
+
+    def __repr__(self):
+        return f"<Cinema {self.nome} ({self.città})>"
+
 # --- CREAZIONE AUTOMATICA TABELLE + ADMIN ---
 with app.app_context():
     db.create_all()
@@ -61,6 +73,31 @@ with app.app_context():
         db.session.add(admin)
         db.session.commit()
         print("✅ Utente admin creato automaticamente (username: admin / password: admin1234)")
+    # Seed cinema da NOC (solo se tabella vuota)
+    if Cinema.query.count() == 0:
+        _cinemas_seed = [
+            {"nome": "Cinema Chiusi",              "città": "Chiusi",           "num_sale": 6},
+            {"nome": "Cinema Empoli",              "città": "Empoli",           "num_sale": 3},
+            {"nome": "Cinema Firenze",             "città": "Firenze",          "num_sale": 1},
+            {"nome": "Cinema Odeon",               "città": "Firenze",          "num_sale": 1},
+            {"nome": "Cinema Grosseto",            "città": "Grosseto",         "num_sale": 4},
+            {"nome": "Cinema Massa",               "città": "Massa",            "num_sale": 7},
+            {"nome": "Cinema Montecatini",         "città": "Montecatini Terme","num_sale": 4},
+            {"nome": "Cinema Pisa",                "città": "Pisa",             "num_sale": 3},
+            {"nome": "Cinecity Pisa",              "città": "Pisa",             "num_sale": 5},
+            {"nome": "Cinema Sansepolcro",         "città": "Sansepolcro",      "num_sale": 1},
+        ]
+        for c in _cinemas_seed:
+            db.session.add(Cinema(**c))
+        db.session.commit()
+        print("✅ Cinema iniziali aggiunti dal NOC")
+    # Migra cinema dai problemi esistenti non ancora in tabella
+    existing_nomi = {c.nome for c in Cinema.query.all()}
+    for p in Problem.query.all():
+        if p.cinema and p.cinema.strip() and p.cinema.strip() not in existing_nomi:
+            db.session.add(Cinema(nome=p.cinema.strip(), città="", num_sale=1))
+            existing_nomi.add(p.cinema.strip())
+    db.session.commit()
 
 # --- ROUTES ---
 @app.route("/")
@@ -126,7 +163,7 @@ def dashboard():
         "chiuso":   0,
         "critico":  sum(1 for p in all_problems if p.urgenza == "Critico"),
     }
-    cinemas = sorted(set(p.cinema for p in all_problems if p.cinema))
+    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
 
     return render_template(
         "dashboard.html",
@@ -209,17 +246,24 @@ def add_problem():
     if "user_id" not in session:
         return redirect(url_for("login"))
 
-    cinema = request.form.get("cinema", "").strip()
+    cinema_nome = request.form.get("cinema", "").strip()
+    sala = request.form.get("sala", "1").strip()
     tipo = request.form.get("tipo", "").strip()
     urgenza = request.form.get("urgenza", "Non urgente")
     stato = request.form.get("stato", "Aperto")
 
-    if not cinema or not tipo:
+    if not cinema_nome or not tipo:
         flash("Compila tutti i campi.", "danger")
         return redirect(url_for("dashboard"))
 
+    # Recupera città dal cinema selezionato
+    cinema_obj = Cinema.query.filter_by(nome=cinema_nome).first()
+    città = cinema_obj.città if cinema_obj else ""
+
     p = Problem(
-        cinema=cinema,
+        cinema=cinema_nome,
+        città=città,
+        sala=sala,
         tipo=tipo,
         urgenza=urgenza,
         stato=stato,
@@ -252,7 +296,8 @@ def edit_problem(problem_id):
         flash("Problema aggiornato con successo.", "success")
         return redirect(url_for("dashboard"))
 
-    return render_template("edit_problem.html", problem=p)
+    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    return render_template("edit_problem.html", problem=p, cinemas=cinemas)
 
 # --- ELIMINA PROBLEMA ---
 @app.route("/problems/<int:problem_id>/delete", methods=["POST"])
@@ -340,6 +385,60 @@ def delete_user(user_id):
     db.session.commit()
     flash(f"Utente '{username}' eliminato.", "success")
     return redirect(url_for("admin_users"))
+
+# --- GESTIONE CINEMA (admin) ---
+@app.route("/admin/cinemas", methods=["GET", "POST"])
+def admin_cinemas():
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        città = request.form.get("città", "").strip()
+        try:
+            num_sale = max(1, int(request.form.get("num_sale", "1")))
+        except ValueError:
+            num_sale = 1
+        if nome:
+            db.session.add(Cinema(nome=nome, città=città, num_sale=num_sale))
+            db.session.commit()
+            flash(f"Cinema '{nome}' ({città}) aggiunto.", "success")
+        return redirect(url_for("admin_cinemas"))
+    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    return render_template("cinemas.html", cinemas=cinemas)
+
+@app.route("/admin/cinemas/<int:cinema_id>/edit", methods=["POST"])
+def edit_cinema(cinema_id):
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+    c = db.session.get(Cinema, cinema_id)
+    if not c:
+        abort(404)
+    nuovo_nome = request.form.get("nome", "").strip()
+    nuova_città = request.form.get("città", "").strip()
+    num_sale_str = request.form.get("num_sale", "1")
+    try:
+        num_sale = max(1, int(num_sale_str))
+    except ValueError:
+        num_sale = 1
+    if nuovo_nome:
+        c.nome = nuovo_nome
+        c.città = nuova_città
+        c.num_sale = num_sale
+        db.session.commit()
+        flash(f"Cinema '{nuovo_nome}' aggiornato.", "success")
+    return redirect(url_for("admin_cinemas"))
+
+@app.route("/admin/cinemas/<int:cinema_id>/delete", methods=["POST"])
+def delete_cinema(cinema_id):
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+    c = db.session.get(Cinema, cinema_id)
+    if c:
+        nome = c.nome
+        db.session.delete(c)
+        db.session.commit()
+        flash(f"Cinema '{nome}' eliminato.", "success")
+    return redirect(url_for("admin_cinemas"))
 
 # --- MAIN ---
 if __name__ == "__main__":

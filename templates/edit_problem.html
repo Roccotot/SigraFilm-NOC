@@ -31,8 +31,14 @@
         <form method="post">
           <div class="mb-3">
             <label class="form-label">Cinema</label>
-            <input type="text" name="cinema" class="form-control"
-              value="{{ problem.cinema }}" required>
+            <select name="cinema" class="form-select" required>
+              {% for c in cinemas %}
+                <option value="{{ c.nome }}" {% if c.nome == problem.cinema %}selected{% endif %}>{{ c.nome }}</option>
+              {% endfor %}
+              {% if problem.cinema not in cinemas|map(attribute='nome')|list %}
+                <option value="{{ problem.cinema }}" selected>{{ problem.cinema }} (non in lista)</option>
+              {% endif %}
+            </select>
           </div>
           <div class="mb-3">
             <label class="form-label">Descrizione</label>

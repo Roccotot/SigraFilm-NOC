@@ -15,9 +15,15 @@
       <a class="navbar-brand" href="{{ url_for('dashboard') }}">
         <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="SigraFilm" height="44">
       </a>
-      <div class="ms-auto d-flex align-items-center gap-2">
-        <span class="nav-user-chip">{{ session.get("username") }}</span>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light">← Dashboard</a>
+      <button class="navbar-toggler" type="button"
+        data-bs-toggle="collapse" data-bs-target="#navbarDetailContent">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarDetailContent">
+        <div class="ms-auto d-flex align-items-center gap-2 mt-2 mt-lg-0">
+          <span class="nav-user-chip">{{ session.get("username") }}</span>
+          <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light">← Dashboard</a>
+        </div>
       </div>
     </div>
   </nav>
@@ -53,14 +59,15 @@
       </div>
       <p class="ticket-desc mt-2 mb-0">{{ problem.tipo }}</p>
       <div class="ticket-meta mt-1">
+        <strong>{{ problem.città }}</strong> · Sala {{ problem.sala }} ·
         Aperto da <strong>{{ problem.autore }}</strong> il {{ problem.data_ora.strftime("%d/%m/%Y alle %H:%M") }}
       </div>
     </div>
 
     <div class="row g-3">
 
-      <!-- Colonna sinistra: Chat -->
-      <div class="col-12 col-md-8">
+      <!-- Colonna sinistra: Chat (su mobile appare DOPO le azioni) -->
+      <div class="col-12 col-md-8 order-2 order-md-1">
         <div class="card shadow-sm h-100 d-flex flex-column">
           <div class="card-body d-flex flex-column" style="padding:0;">
             <div class="chat-title">Conversazione</div>
@@ -101,16 +108,24 @@
         </div>
       </div>
 
-      <!-- Colonna destra: Azioni -->
-      <div class="col-12 col-md-4">
+      <!-- Colonna destra: Azioni (su mobile appare PRIMA della chat) -->
+      <div class="col-12 col-md-4 order-1 order-md-2">
 
         <!-- Dettagli -->
         <div class="card shadow-sm mb-3">
           <div class="card-body">
             <div class="card-title">Dettagli</div>
             <div class="ticket-detail-row">
+              <span class="ticket-detail-label">Città</span>
+              <span>{{ problem.città }}</span>
+            </div>
+            <div class="ticket-detail-row">
               <span class="ticket-detail-label">Cinema</span>
               <span>{{ problem.cinema }}</span>
+            </div>
+            <div class="ticket-detail-row">
+              <span class="ticket-detail-label">Sala</span>
+              <span>Sala {{ problem.sala }}</span>
             </div>
             <div class="ticket-detail-row">
               <span class="ticket-detail-label">Autore</span>
