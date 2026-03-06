@@ -64,9 +64,25 @@ class Cinema(db.Model):
     def __repr__(self):
         return f"<Cinema {self.nome} ({self.città})>"
 
-# --- CREAZIONE AUTOMATICA TABELLE + ADMIN ---
+# --- CREAZIONE AUTOMATICA TABELLE + MIGRAZIONI ---
 with app.app_context():
     db.create_all()
+
+    # Migrazione colonne mancanti (ALTER TABLE sicuro)
+    _migrations = [
+        ("problems", "città",   "VARCHAR(100) NOT NULL DEFAULT ''"),
+        ("problems", "sala",    "VARCHAR(20)  NOT NULL DEFAULT '1'"),
+        ("cinemas",  "città",   "VARCHAR(100) NOT NULL DEFAULT ''"),
+        ("cinemas",  "num_sale","INTEGER      NOT NULL DEFAULT 1"),
+    ]
+    with db.engine.connect() as conn:
+        for table, col, col_def in _migrations:
+            try:
+                conn.execute(db.text(f'ALTER TABLE {table} ADD COLUMN "{col}" {col_def}'))
+                conn.commit()
+                print(f"✅ Migrazione: {table}.{col} aggiunta")
+            except Exception:
+                conn.rollback()  # colonna già presente, ignora
     admin = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
     if not admin:
         admin = User(username="admin", password_hash=generate_password_hash("admin1234"), role="admin")
