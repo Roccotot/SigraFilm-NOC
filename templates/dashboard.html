@@ -23,11 +23,11 @@
       </button>
 
       <div class="collapse navbar-collapse" id="navbarContent">
-        <div class="ms-auto d-flex gap-2 mt-2 mt-lg-0">
+        <div class="ms-auto d-flex align-items-center gap-2 mt-2 mt-lg-0">
+          <span class="nav-user-chip">{{ session.get("username") }}</span>
+          <a href="{{ url_for('closed_tickets') }}" class="btn btn-outline-light">🗄 Archivio</a>
           {% if session.get("role") == "admin" %}
-            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light">
-              Gestione Utenti
-            </a>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light">Gestione Utenti</a>
           {% endif %}
           <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
         </div>
@@ -46,6 +46,13 @@
       {% endif %}
     {% endwith %}
 
+    <!-- Datalist cinema (per autocomplete) -->
+    <datalist id="cinema-list">
+      {% for c in cinemas %}
+        <option value="{{ c }}">
+      {% endfor %}
+    </datalist>
+
     <!-- Form segnalazione problema -->
     <div class="card shadow-sm mb-4">
       <div class="card-body">
@@ -53,12 +60,16 @@
         <form method="post" action="{{ url_for('add_problem') }}">
           <div class="row g-3">
             <div class="col-12 col-md-3">
-              <input type="text" name="cinema" class="form-control" placeholder="Cinema" required>
+              <label class="form-label">Cinema</label>
+              <input type="text" name="cinema" class="form-control" placeholder="Nome cinema"
+                list="cinema-list" autocomplete="off" required>
             </div>
             <div class="col-12 col-md-5">
-              <textarea name="tipo" class="form-control" placeholder="Descrizione del problema" rows="2" required></textarea>
+              <label class="form-label">Descrizione</label>
+              <textarea name="tipo" class="form-control" placeholder="Descrivi il problema..." rows="2" required></textarea>
             </div>
             <div class="col-12 col-md-2">
+              <label class="form-label">Urgenza</label>
               <select name="urgenza" class="form-select">
                 <option value="Non urgente">Non urgente</option>
                 <option value="Urgente">Urgente</option>
@@ -66,16 +77,58 @@
               </select>
             </div>
             <div class="col-12 col-md-2 d-flex align-items-end">
-              <button type="submit" class="btn btn-primary w-100">Aggiungi</button>
+              <button type="submit" class="btn btn-primary w-100">+ Aggiungi</button>
             </div>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- Tabella problemi -->
-    <h2 class="page-heading">Problemi</h2>
+    <!-- Stats bar -->
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <div class="stat-chip stat-chip-total">{{ stats.total }} Totale</div>
+      <div class="stat-chip stat-chip-aperto">{{ stats.aperto }} Aperti</div>
+      <div class="stat-chip stat-chip-in-corso">{{ stats.in_corso }} In corso</div>
+      <div class="stat-chip stat-chip-chiuso">{{ stats.chiuso }} Chiusi</div>
+      {% if stats.critico > 0 %}
+        <div class="stat-chip stat-chip-critico">⚠ {{ stats.critico }} Critici</div>
+      {% endif %}
+    </div>
 
+    <!-- Heading + Filtri -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <h2 class="page-heading mb-0">Problemi
+        {% if filter_urgenza or filter_stato %}
+          <small>(filtrati)</small>
+        {% endif %}
+      </h2>
+      <div class="filter-bar">
+        <!-- Filtro stato -->
+        <a href="?filter_stato=&filter_urgenza={{ filter_urgenza }}"
+          class="filter-pill filter-pill-all {% if not filter_stato %}active{% endif %}">Tutti</a>
+        <a href="?filter_stato=Aperto&filter_urgenza={{ filter_urgenza }}"
+          class="filter-pill filter-pill-aperto {% if filter_stato == 'Aperto' %}active{% endif %}">Aperto</a>
+        <a href="?filter_stato=In+corso&filter_urgenza={{ filter_urgenza }}"
+          class="filter-pill filter-pill-in-corso {% if filter_stato == 'In corso' %}active{% endif %}">In corso</a>
+        <span class="filter-divider">·</span>
+
+        <!-- Filtro urgenza -->
+        <a href="?filter_urgenza=&filter_stato={{ filter_stato }}"
+          class="filter-pill {% if not filter_urgenza %}active{% endif %}">Tutte</a>
+        <a href="?filter_urgenza=Critico&filter_stato={{ filter_stato }}"
+          class="filter-pill filter-pill-critico {% if filter_urgenza == 'Critico' %}active{% endif %}">Critico</a>
+        <a href="?filter_urgenza=Urgente&filter_stato={{ filter_stato }}"
+          class="filter-pill filter-pill-urgente {% if filter_urgenza == 'Urgente' %}active{% endif %}">Urgente</a>
+        <a href="?filter_urgenza=Non+urgente&filter_stato={{ filter_stato }}"
+          class="filter-pill filter-pill-non-urgente {% if filter_urgenza == 'Non urgente' %}active{% endif %}">Non urgente</a>
+
+        {% if filter_urgenza or filter_stato %}
+          <a href="?" class="filter-pill" style="color:var(--red); border-color:rgba(248,81,73,.3);">✕ Reset</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Tabella problemi -->
     {% if problems %}
       <div class="table-responsive">
         <table class="table table-striped table-hover sortable">
@@ -94,8 +147,13 @@
           <tbody>
             {% for p in problems %}
             <tr class="{% if p.urgenza == 'Critico' %}row-critico{% elif p.urgenza == 'Urgente' %}row-urgente{% else %}row-non-urgente{% endif %}">
-              <td style="color:var(--text-3); font-size:.78rem; font-weight:500;">#{{ p.id }}</td>
-              <td style="font-weight:500;">{{ p.cinema }}</td>
+              <td>
+                <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
+                  style="color:var(--text-3); font-size:.78rem; font-weight:600; text-decoration:none;">
+                  #{{ p.id }}
+                </a>
+              </td>
+              <td style="font-weight:600;">{{ p.cinema }}</td>
               <td style="max-width:260px; white-space:normal; color:var(--text-2);">{{ p.tipo }}</td>
               <td>
                 {% if p.urgenza == 'Critico' %}
@@ -137,7 +195,17 @@
         </table>
       </div>
     {% else %}
-      <div class="alert alert-info">Nessun problema registrato.</div>
+      <div class="empty-state">
+        <div class="empty-state-icon">✓</div>
+        <div class="empty-state-title">Nessun problema trovato</div>
+        <div class="empty-state-sub">
+          {% if filter_urgenza or filter_stato %}
+            Prova a modificare i filtri — <a href="?">Reset filtri</a>
+          {% else %}
+            Tutto regolare, nessuna segnalazione aperta.
+          {% endif %}
+        </div>
+      </div>
     {% endif %}
 
   </div>
