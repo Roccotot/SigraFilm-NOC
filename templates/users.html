@@ -17,7 +17,7 @@
       </a>
       <div class="ms-auto d-flex gap-2">
         <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light">← Dashboard</a>
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-light">🚪 Logout</a>
       </div>
     </div>
   </nav>
@@ -108,7 +108,7 @@
                       placeholder="Nuova password" minlength="8" required
                       class="form-control d-inline-block"
                       style="width:160px; vertical-align:middle; margin-right:.35rem;">
-                    <button type="submit" class="btn btn-sm btn-warning">Reset</button>
+                    <button type="submit" class="btn btn-sm btn-warning">Aggiorna password</button>
                   </form>
                   <form method="post"
                     action="{{ url_for('delete_user', user_id=u.id) }}"

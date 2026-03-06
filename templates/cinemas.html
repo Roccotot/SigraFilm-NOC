@@ -89,7 +89,7 @@
                 <td class="text-end text-nowrap">
                   <!-- Form modifica inline (nascosta di default) sostituisce tutta la riga -->
                   <button type="button" class="btn btn-sm btn-warning me-1"
-                    onclick="startEdit({{ c.id }}, {{ c.nome|tojson }}, {{ c.città|tojson }}, {{ c.num_sale }})">✏</button>
+                    onclick='startEdit({{ c.id }}, {{ c.nome|tojson }}, {{ c.città|tojson }}, {{ c.num_sale }})'>✏</button>
                   <form method="post"
                     action="{{ url_for('delete_cinema', cinema_id=c.id) }}"
                     class="d-inline"

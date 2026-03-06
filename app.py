@@ -459,7 +459,7 @@ def admin_cinemas():
             db.session.commit()
             flash(f"Cinema '{nome}' ({città}) aggiunto.", "success")
         return redirect(url_for("admin_cinemas"))
-    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    cinemas = Cinema.query.order_by(Cinema.città.asc(), Cinema.nome.asc()).all()
     return render_template("cinemas.html", cinemas=cinemas)
 
 @app.route("/admin/cinemas/<int:cinema_id>/edit", methods=["POST"])
