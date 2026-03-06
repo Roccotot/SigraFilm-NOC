@@ -25,6 +25,8 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.Text, nullable=False)
     role = db.Column(db.String(20), default="user")
+    telefono = db.Column(db.String(30), default="")
+    email = db.Column(db.String(120), default="")
 
     def __repr__(self):
         return f"<User {self.username}>"
@@ -70,10 +72,12 @@ with app.app_context():
 
     # Migrazione colonne mancanti (ALTER TABLE sicuro)
     _migrations = [
-        ("problems", "città",   "VARCHAR(100) NOT NULL DEFAULT ''"),
-        ("problems", "sala",    "VARCHAR(20)  NOT NULL DEFAULT '1'"),
-        ("cinemas",  "città",   "VARCHAR(100) NOT NULL DEFAULT ''"),
-        ("cinemas",  "num_sale","INTEGER      NOT NULL DEFAULT 1"),
+        ("problems", "città",    "VARCHAR(100) NOT NULL DEFAULT ''"),
+        ("problems", "sala",     "VARCHAR(20)  NOT NULL DEFAULT '1'"),
+        ("cinemas",  "città",    "VARCHAR(100) NOT NULL DEFAULT ''"),
+        ("cinemas",  "num_sale", "INTEGER      NOT NULL DEFAULT 1"),
+        ("users",    "telefono", "VARCHAR(30)  NOT NULL DEFAULT ''"),
+        ("users",    "email",    "VARCHAR(120) NOT NULL DEFAULT ''"),
     ]
     with db.engine.connect() as conn:
         for table, col, col_def in _migrations:
@@ -89,26 +93,59 @@ with app.app_context():
         db.session.add(admin)
         db.session.commit()
         print("✅ Utente admin creato automaticamente (username: admin / password: admin1234)")
-    # Seed cinema da NOC (solo se tabella vuota)
-    if Cinema.query.count() == 0:
-        _cinemas_seed = [
-            {"nome": "Cinema Chiusi",              "città": "Chiusi",           "num_sale": 6},
-            {"nome": "Cinema Empoli",              "città": "Empoli",           "num_sale": 3},
-            {"nome": "Cinema Firenze",             "città": "Firenze",          "num_sale": 1},
-            {"nome": "Cinema Odeon",               "città": "Firenze",          "num_sale": 1},
-            {"nome": "Cinema Grosseto",            "città": "Grosseto",         "num_sale": 4},
-            {"nome": "Cinema Massa",               "città": "Massa",            "num_sale": 7},
-            {"nome": "Cinema Montecatini",         "città": "Montecatini Terme","num_sale": 4},
-            {"nome": "Cinema Pisa",                "città": "Pisa",             "num_sale": 3},
-            {"nome": "Cinecity Pisa",              "città": "Pisa",             "num_sale": 5},
-            {"nome": "Cinema Sansepolcro",         "città": "Sansepolcro",      "num_sale": 1},
-        ]
-        for c in _cinemas_seed:
+    # Seed cinema — inserisce solo quelli mancanti (funziona su DB vuoto e già popolato)
+    _cinemas_seed = [
+        {"nome": "Cinema Chiusi",                          "città": "Chiusi",                    "num_sale": 6},
+        {"nome": "Cinema Empoli",                          "città": "Empoli",                    "num_sale": 3},
+        {"nome": "Cinema Firenze",                         "città": "Firenze",                   "num_sale": 1},
+        {"nome": "Cinema Odeon",                           "città": "Firenze",                   "num_sale": 1},
+        {"nome": "Cinema Grosseto",                        "città": "Grosseto",                  "num_sale": 4},
+        {"nome": "Cinema Massa",                           "città": "Massa",                     "num_sale": 7},
+        {"nome": "Cinema Montecatini",                     "città": "Montecatini Terme",          "num_sale": 4},
+        {"nome": "Cinema Pisa",                            "città": "Pisa",                      "num_sale": 3},
+        {"nome": "Cinecity Pisa",                          "città": "Pisa",                      "num_sale": 5},
+        {"nome": "Cinema Sansepolcro",                     "città": "Sansepolcro",               "num_sale": 1},
+        {"nome": "ELIA ANTICA MULTISALA",                  "città": "Grosseto",                  "num_sale": 4},
+        {"nome": "Cinema Scuderie Granducali Seravezza",   "città": "Seravezza",                 "num_sale": 1},
+        {"nome": "Teatro Cinema Giotto",                   "città": "Borgo San Lorenzo",         "num_sale": 1},
+        {"nome": "Cinema Metropolitan",                    "città": "Piombino",                  "num_sale": 1},
+        {"nome": "Cinema Multisala Excelsior",             "città": "Montecatini Terme",          "num_sale": 2},
+        {"nome": "Cinema Teatro Scipione Ammirato",        "città": "Montaione",                 "num_sale": 1},
+        {"nome": "Multisala Isola Verde",                  "città": "Pisa",                      "num_sale": 3},
+        {"nome": "Cinema Sala Esse",                       "città": "Firenze",                   "num_sale": 1},
+        {"nome": "Multisala Goldoni",                      "città": "Viareggio",                 "num_sale": 2},
+        {"nome": "Cinema Multisala Il Portico",            "città": "Firenze",                   "num_sale": 2},
+        {"nome": "Cinema Teatro Everest Galluzzo",         "città": "Firenze",                   "num_sale": 1},
+        {"nome": "Spazio Alfieri Cinema Teatro Bistrò",    "città": "Firenze",                   "num_sale": 1},
+        {"nome": "Cinema Teatro Multisala Imperiale",      "città": "Montecatini Terme",          "num_sale": 4},
+        {"nome": "Cinema Centrale",                        "città": "Viareggio",                 "num_sale": 1},
+        {"nome": "Cinema Nuova Aurora",                    "città": "Sansepolcro",               "num_sale": 1},
+        {"nome": "Cinema Marconi",                         "città": "Firenze",                   "num_sale": 3},
+        {"nome": "Multisala Splendor",                     "città": "Massa",                     "num_sale": 7},
+        {"nome": "Teatro dei Servi",                       "città": "Massa",                     "num_sale": 1},
+        {"nome": "Multisala Odeon",                        "città": "Pisa",                      "num_sale": 4},
+        {"nome": "Cinema Caffè Lanteri",                   "città": "Pisa",                      "num_sale": 1},
+        {"nome": "Cinema Teatro 4 Mori",                   "città": "Livorno",                   "num_sale": 1},
+        {"nome": "Multisala Eden",                         "città": "Arezzo",                    "num_sale": 2},
+        {"nome": "Nuovo Cinema Caporali",                  "città": "Castiglione del Lago",      "num_sale": 3},
+        {"nome": "Cinema Teatro Verdi",                    "città": "San Vincenzo",              "num_sale": 1},
+        {"nome": "Teatro Signorelli",                      "città": "Cortona",                   "num_sale": 1},
+        {"nome": "Cinema Città di Villafranca",            "città": "Villafranca in Lunigiana",  "num_sale": 1},
+        {"nome": "Cinema Teatro Excelsior",                "città": "Reggello",                  "num_sale": 1},
+        {"nome": "Cinema Arena Ardenza",                   "città": "Livorno",                   "num_sale": 1},
+        {"nome": "Arena Dentro Le Mura",                   "città": "San Casciano Val di Pesa",  "num_sale": 1},
+    ]
+    _existing_nomi = {c.nome for c in Cinema.query.all()}
+    _added = 0
+    for c in _cinemas_seed:
+        if c["nome"] not in _existing_nomi:
             db.session.add(Cinema(**c))
+            _added += 1
+    if _added:
         db.session.commit()
-        print("✅ Cinema iniziali aggiunti dal NOC")
+        print(f"✅ {_added} cinema aggiunti al catalogo")
     # Migra cinema dai problemi esistenti non ancora in tabella
-    existing_nomi = {c.nome for c in Cinema.query.all()}
+    existing_nomi = {c.nome for c in Cinema.query.all()}  # ricarica dopo seed
     for p in Problem.query.all():
         if p.cinema and p.cinema.strip() and p.cinema.strip() not in existing_nomi:
             db.session.add(Cinema(nome=p.cinema.strip(), città="", num_sale=1))
@@ -343,6 +380,8 @@ def admin_users():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role = request.form.get("role", "user")
+        telefono = request.form.get("telefono", "").strip()
+        email = request.form.get("email", "").strip()
 
         if not username or len(password) < 8:
             flash("Username obbligatorio e password di almeno 8 caratteri.", "danger")
@@ -353,7 +392,8 @@ def admin_users():
             flash("Username già in uso.", "warning")
             return redirect(url_for("admin_users"))
 
-        u = User(username=username, role=role, password_hash=generate_password_hash(password))
+        u = User(username=username, role=role, password_hash=generate_password_hash(password),
+                 telefono=telefono, email=email)
         db.session.add(u)
         db.session.commit()
         flash("Utente creato con successo.", "success")

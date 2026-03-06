@@ -28,7 +28,7 @@
           <a href="{{ url_for('closed_tickets') }}" class="btn btn-outline-light">🗄 Archivio</a>
           {% if session.get("role") == "admin" %}
             <a href="{{ url_for('admin_cinemas') }}" class="btn btn-outline-light">🎬 Cinema</a>
-            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light">Utenti</a>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light">👥 Utenti</a>
           {% endif %}
           <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
         </div>
@@ -47,28 +47,45 @@
       {% endif %}
     {% endwith %}
 
-    <!-- Dati cinema per JS sala dropdown -->
+    <!-- Dati cinema per JS città→cinema→sala -->
     <script>
-      const cinemasData = {
+      const allCinemas = [
         {% for c in cinemas %}
-        {{ c.id }}: { nome: {{ c.nome|tojson }}, numSale: {{ c.num_sale }} }{% if not loop.last %},{% endif %}
+        { id: {{ c.id }}, nome: {{ c.nome|tojson }}, città: {{ c.città|tojson }}, numSale: {{ c.num_sale }} }{% if not loop.last %},{% endif %}
         {% endfor %}
-      };
+      ];
+
+      function updateCinema() {
+        const città = document.getElementById("città-sel").value;
+        const cinSel = document.getElementById("cinema-sel");
+        cinSel.innerHTML = '<option value="" data-cid="">— Seleziona —</option>';
+        allCinemas
+          .filter(c => !città || c.città === città)
+          .forEach(c => {
+            const o = document.createElement("option");
+            o.value = c.nome; o.dataset.cid = c.id; o.text = c.nome;
+            cinSel.appendChild(o);
+          });
+        cinSel.disabled = !città;
+        updateSale();
+      }
+
       function updateSale() {
-        const sel = document.getElementById("cinema-sel");
-        const opt = sel.options[sel.selectedIndex];
-        const cid = parseInt(opt.dataset.cid);
-        const salaSelect = document.getElementById("sala-sel");
-        const prev = salaSelect.value;
-        salaSelect.innerHTML = "";
-        const n = cid && cinemasData[cid] ? cinemasData[cid].numSale : 0;
+        const cinSel = document.getElementById("cinema-sel");
+        const opt = cinSel.options[cinSel.selectedIndex];
+        const cid = parseInt(opt && opt.dataset.cid);
+        const salaSel = document.getElementById("sala-sel");
+        const prev = salaSel.value;
+        salaSel.innerHTML = "";
+        const cinema = allCinemas.find(c => c.id === cid);
+        const n = cinema ? cinema.numSale : 0;
         for (let i = 1; i <= n; i++) {
           const o = document.createElement("option");
           o.value = i; o.text = "Sala " + i;
           if (String(i) === prev) o.selected = true;
-          salaSelect.appendChild(o);
+          salaSel.appendChild(o);
         }
-        salaSelect.disabled = n === 0;
+        salaSel.disabled = n === 0;
       }
     </script>
 
@@ -76,46 +93,53 @@
     <div class="card shadow-sm mb-4">
       <div class="card-body">
         <div class="card-title">Segnala problema</div>
+        {% if cinemas %}
         <form method="post" action="{{ url_for('add_problem') }}">
-          <div class="row g-3">
-            <div class="col-12 col-md-3">
-              <label class="form-label">Cinema</label>
-              {% if cinemas %}
-                <select name="cinema" id="cinema-sel" class="form-select" required onchange="updateSale()">
-                  <option value="" data-cid="">— Seleziona —</option>
-                  {% for c in cinemas %}
-                    <option value="{{ c.nome }}" data-cid="{{ c.id }}">{{ c.città }} — {{ c.nome }}</option>
-                  {% endfor %}
-                </select>
-              {% else %}
-                <div class="alert alert-warning py-2 mb-0" style="font-size:.78rem;">
-                  Nessun cinema. <a href="{{ url_for('admin_cinemas') }}">Aggiungili qui</a>.
-                </div>
-              {% endif %}
+          <div class="row g-2 align-items-end">
+            <div class="col-6 col-md">
+              <label class="form-label mb-1">Città</label>
+              <select id="città-sel" class="form-select noc-field" onchange="updateCinema()">
+                <option value="">— Città —</option>
+                {% set cities = cinemas | map(attribute='città') | unique | sort %}
+                {% for city in cities %}
+                  <option value="{{ city }}">{{ city }}</option>
+                {% endfor %}
+              </select>
             </div>
-            <div class="col-6 col-md-1">
-              <label class="form-label">Sala</label>
-              <select name="sala" id="sala-sel" class="form-select" disabled>
+            <div class="col-6 col-md">
+              <label class="form-label mb-1">Cinema</label>
+              <select name="cinema" id="cinema-sel" class="form-select noc-field" required onchange="updateSale()" disabled>
+                <option value="" data-cid="">— Cinema —</option>
+              </select>
+            </div>
+            <div class="col-4 col-md-1">
+              <label class="form-label mb-1">Sala</label>
+              <select name="sala" id="sala-sel" class="form-select noc-field" disabled>
                 <option value="">—</option>
               </select>
             </div>
-            <div class="col-12 col-md-4">
-              <label class="form-label">Descrizione</label>
-              <textarea name="tipo" class="form-control" placeholder="Descrivi il problema..." rows="2" required></textarea>
-            </div>
-            <div class="col-6 col-md-2">
-              <label class="form-label">Urgenza</label>
-              <select name="urgenza" class="form-select">
+            <div class="col-8 col-md">
+              <label class="form-label mb-1">Urgenza</label>
+              <select name="urgenza" class="form-select noc-field">
                 <option value="Non urgente">Non urgente</option>
                 <option value="Urgente">Urgente</option>
                 <option value="Critico">Critico</option>
               </select>
             </div>
-            <div class="col-12 col-md-2 d-flex align-items-end">
-              <button type="submit" class="btn btn-primary w-100">+ Aggiungi</button>
+            <div class="col-12 col-md-4">
+              <label class="form-label mb-1">Descrizione</label>
+              <input type="text" name="tipo" class="form-control noc-field" placeholder="Descrivi il problema…" required>
+            </div>
+            <div class="col-12 col-md-auto">
+              <button type="submit" class="btn btn-primary noc-field w-100" style="min-width:9rem;">+ Aggiungi</button>
             </div>
           </div>
         </form>
+        {% else %}
+          <div class="alert alert-warning py-2 mb-0" style="font-size:.78rem;">
+            Nessun cinema. <a href="{{ url_for('admin_cinemas') }}">Aggiungili qui</a>.
+          </div>
+        {% endif %}
       </div>
     </div>
 
