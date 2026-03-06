@@ -44,10 +44,21 @@
     <div class="card shadow-sm mb-4">
       <div class="card-body">
         <div class="card-title">Aggiungi cinema</div>
-        <form method="post" class="d-flex gap-2">
-          <input type="text" name="nome" class="form-control"
-            placeholder="Nome del cinema…" required autocomplete="off">
-          <button type="submit" class="btn btn-primary" style="white-space:nowrap;">+ Aggiungi</button>
+        <form method="post">
+          <div class="row g-2">
+            <div class="col-12 col-md-4">
+              <input type="text" name="nome" class="form-control" placeholder="Nome cinema" required autocomplete="off">
+            </div>
+            <div class="col-12 col-md-3">
+              <input type="text" name="città" class="form-control" placeholder="Città" required autocomplete="off">
+            </div>
+            <div class="col-6 col-md-2">
+              <input type="number" name="num_sale" class="form-control" placeholder="N° sale" min="1" max="30" value="1" required>
+            </div>
+            <div class="col-6 col-md-3 d-flex align-items-end">
+              <button type="submit" class="btn btn-primary w-100">+ Aggiungi</button>
+            </div>
+          </div>
         </form>
       </div>
     </div>
@@ -59,38 +70,48 @@
           <table class="table table-hover mb-0" style="border-radius:10px; overflow:hidden;">
             <thead class="table-dark">
               <tr>
-                <th style="width:3rem; font-size:.7rem;">#</th>
+                <th style="width:2.5rem; font-size:.7rem;">#</th>
+                <th>Città</th>
                 <th>Nome cinema</th>
-                <th class="sorttable_nosort text-end" style="cursor:default; width:1px; white-space:nowrap;">Azioni</th>
+                <th style="width:5rem;">Sale</th>
+                <th class="text-end" style="width:1px; white-space:nowrap;">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {% for c in cinemas %}
               <tr>
                 <td style="color:var(--text-3); font-size:.75rem;">{{ loop.index }}</td>
-                <td>
-                  <!-- Nome in visualizzazione -->
-                  <span class="cinema-name-display" id="name-{{ c.id }}">{{ c.nome }}</span>
-                  <!-- Form modifica inline (nascosta di default) -->
-                  <form method="post" action="{{ url_for('edit_cinema', cinema_id=c.id) }}"
-                    class="cinema-edit-form d-none" id="edit-{{ c.id }}">
-                    <div class="d-flex gap-2 align-items-center">
-                      <input type="text" name="nome" class="form-control form-control-sm"
-                        value="{{ c.nome }}" required style="max-width:280px;">
-                      <button type="submit" class="btn btn-sm btn-success">✓</button>
-                      <button type="button" class="btn btn-sm btn-secondary"
-                        onclick="cancelEdit({{ c.id }})">✕</button>
-                    </div>
-                  </form>
+                <td style="color:var(--text-2);" id="città-{{ c.id }}">{{ c.città }}</td>
+                <td id="name-{{ c.id }}">
+                  <strong>{{ c.nome }}</strong>
                 </td>
+                <td style="color:var(--text-2); font-size:.82rem;" id="sale-{{ c.id }}">{{ c.num_sale }}</td>
                 <td class="text-end text-nowrap">
+                  <!-- Form modifica inline (nascosta di default) sostituisce tutta la riga -->
                   <button type="button" class="btn btn-sm btn-warning me-1"
-                    onclick="startEdit({{ c.id }})">✏</button>
+                    onclick="startEdit({{ c.id }}, {{ c.nome|tojson }}, {{ c.città|tojson }}, {{ c.num_sale }})">✏</button>
                   <form method="post"
                     action="{{ url_for('delete_cinema', cinema_id=c.id) }}"
                     class="d-inline"
-                    onsubmit="return confirm('Eliminare {{ c.nome }}? I ticket esistenti manterranno il nome salvato.')">
+                    onsubmit="return confirm('Eliminare {{ c.nome }}?')">
                     <button type="submit" class="btn btn-sm btn-danger">🗑</button>
+                  </form>
+                </td>
+              </tr>
+              <!-- Riga modifica (inline, nascosta) -->
+              <tr class="d-none" id="editrow-{{ c.id }}" style="background:var(--bg-input);">
+                <td colspan="5">
+                  <form method="post" action="{{ url_for('edit_cinema', cinema_id=c.id) }}"
+                    class="d-flex flex-wrap gap-2 align-items-center py-1">
+                    <input type="text" name="nome" id="einome-{{ c.id }}" class="form-control form-control-sm"
+                      placeholder="Nome" required style="max-width:200px;">
+                    <input type="text" name="città" id="eicittà-{{ c.id }}" class="form-control form-control-sm"
+                      placeholder="Città" required style="max-width:150px;">
+                    <input type="number" name="num_sale" id="eisale-{{ c.id }}" class="form-control form-control-sm"
+                      min="1" max="30" placeholder="Sale" required style="max-width:80px;">
+                    <button type="submit" class="btn btn-sm btn-success">✓ Salva</button>
+                    <button type="button" class="btn btn-sm btn-secondary"
+                      onclick="cancelEdit({{ c.id }})">✕</button>
                   </form>
                 </td>
               </tr>
@@ -115,14 +136,15 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    function startEdit(id) {
-      document.getElementById("name-" + id).classList.add("d-none");
-      document.getElementById("edit-" + id).classList.remove("d-none");
-      document.getElementById("edit-" + id).querySelector("input").focus();
+    function startEdit(id, nome, città, numSale) {
+      document.getElementById("editrow-" + id).classList.remove("d-none");
+      document.getElementById("einome-" + id).value = nome;
+      document.getElementById("eicittà-" + id).value = città;
+      document.getElementById("eisale-" + id).value = numSale;
+      document.getElementById("einome-" + id).focus();
     }
     function cancelEdit(id) {
-      document.getElementById("name-" + id).classList.remove("d-none");
-      document.getElementById("edit-" + id).classList.add("d-none");
+      document.getElementById("editrow-" + id).classList.add("d-none");
     }
   </script>
 </body>

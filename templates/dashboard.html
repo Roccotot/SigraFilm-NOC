@@ -47,6 +47,31 @@
       {% endif %}
     {% endwith %}
 
+    <!-- Dati cinema per JS sala dropdown -->
+    <script>
+      const cinemasData = {
+        {% for c in cinemas %}
+        {{ c.id }}: { nome: {{ c.nome|tojson }}, numSale: {{ c.num_sale }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+      };
+      function updateSale() {
+        const sel = document.getElementById("cinema-sel");
+        const opt = sel.options[sel.selectedIndex];
+        const cid = parseInt(opt.dataset.cid);
+        const salaSelect = document.getElementById("sala-sel");
+        const prev = salaSelect.value;
+        salaSelect.innerHTML = "";
+        const n = cid && cinemasData[cid] ? cinemasData[cid].numSale : 0;
+        for (let i = 1; i <= n; i++) {
+          const o = document.createElement("option");
+          o.value = i; o.text = "Sala " + i;
+          if (String(i) === prev) o.selected = true;
+          salaSelect.appendChild(o);
+        }
+        salaSelect.disabled = n === 0;
+      }
+    </script>
+
     <!-- Form segnalazione problema -->
     <div class="card shadow-sm mb-4">
       <div class="card-body">
@@ -56,24 +81,29 @@
             <div class="col-12 col-md-3">
               <label class="form-label">Cinema</label>
               {% if cinemas %}
-                <select name="cinema" class="form-select" required>
-                  <option value="">— Seleziona —</option>
+                <select name="cinema" id="cinema-sel" class="form-select" required onchange="updateSale()">
+                  <option value="" data-cid="">— Seleziona —</option>
                   {% for c in cinemas %}
-                    <option value="{{ c.nome }}">{{ c.nome }}</option>
+                    <option value="{{ c.nome }}" data-cid="{{ c.id }}">{{ c.città }} — {{ c.nome }}</option>
                   {% endfor %}
                 </select>
               {% else %}
                 <div class="alert alert-warning py-2 mb-0" style="font-size:.78rem;">
-                  Nessun cinema disponibile. L'admin deve aggiungerne dalla
-                  <a href="{{ url_for('admin_cinemas') }}">gestione cinema</a>.
+                  Nessun cinema. <a href="{{ url_for('admin_cinemas') }}">Aggiungili qui</a>.
                 </div>
               {% endif %}
             </div>
-            <div class="col-12 col-md-5">
+            <div class="col-6 col-md-1">
+              <label class="form-label">Sala</label>
+              <select name="sala" id="sala-sel" class="form-select" disabled>
+                <option value="">—</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-4">
               <label class="form-label">Descrizione</label>
               <textarea name="tipo" class="form-control" placeholder="Descrivi il problema..." rows="2" required></textarea>
             </div>
-            <div class="col-12 col-md-2">
+            <div class="col-6 col-md-2">
               <label class="form-label">Urgenza</label>
               <select name="urgenza" class="form-select">
                 <option value="Non urgente">Non urgente</option>
@@ -140,7 +170,9 @@
           <thead class="table-dark">
             <tr>
               <th class="d-none d-md-table-cell">ID</th>
+              <th class="d-none d-md-table-cell">Città</th>
               <th>Cinema</th>
+              <th>Sala</th>
               <th class="d-none d-lg-table-cell">Descrizione</th>
               <th>Urgenza</th>
               <th>Stato</th>
@@ -158,13 +190,15 @@
                   #{{ p.id }}
                 </a>
               </td>
+              <td class="d-none d-md-table-cell" style="color:var(--text-2); font-size:.82rem;">{{ p.città }}</td>
               <td style="font-weight:600;">
                 <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
                   style="color:var(--text-1); text-decoration:none;">{{ p.cinema }}</a>
                 <div class="d-md-none" style="font-size:.72rem; color:var(--text-3); font-weight:400; margin-top:.15rem;">
-                  #{{ p.id }}
+                  {{ p.città }} · #{{ p.id }}
                 </div>
               </td>
+              <td style="font-size:.82rem; font-weight:600; color:var(--text-2);">S.{{ p.sala }}</td>
               <td class="d-none d-lg-table-cell" style="max-width:220px; white-space:normal; color:var(--text-2);">{{ p.tipo }}</td>
               <td>
                 {% if p.urgenza == 'Critico' %}

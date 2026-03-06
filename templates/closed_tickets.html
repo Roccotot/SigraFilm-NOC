@@ -54,26 +54,33 @@
         <table class="table table-striped table-hover sortable">
           <thead class="table-dark">
             <tr>
-              <th>ID</th>
+              <th class="d-none d-md-table-cell">ID</th>
+              <th class="d-none d-md-table-cell">Città</th>
               <th>Cinema</th>
-              <th>Descrizione</th>
+              <th>Sala</th>
+              <th class="d-none d-lg-table-cell">Descrizione</th>
               <th>Urgenza</th>
-              <th>Autore</th>
-              <th>Data</th>
+              <th class="d-none d-md-table-cell">Autore</th>
+              <th class="d-none d-md-table-cell">Data</th>
               <th class="sorttable_nosort" style="cursor:default;">Azioni</th>
             </tr>
           </thead>
           <tbody>
             {% for p in problems %}
             <tr class="row-non-urgente" style="opacity:.8;">
-              <td>
+              <td class="d-none d-md-table-cell">
                 <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
                   style="color:var(--text-3); font-size:.78rem; font-weight:600; text-decoration:none;">
                   #{{ p.id }}
                 </a>
               </td>
-              <td style="font-weight:600; color:var(--text-2);">{{ p.cinema }}</td>
-              <td style="max-width:280px; white-space:normal; color:var(--text-3);">{{ p.tipo }}</td>
+              <td class="d-none d-md-table-cell" style="color:var(--text-2); font-size:.82rem;">{{ p.città }}</td>
+              <td style="font-weight:600; color:var(--text-2);">
+                <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
+                  style="color:var(--text-2); text-decoration:none;">{{ p.cinema }}</a>
+              </td>
+              <td style="font-size:.82rem; color:var(--text-3);">S.{{ p.sala }}</td>
+              <td class="d-none d-lg-table-cell" style="max-width:280px; white-space:normal; color:var(--text-3);">{{ p.tipo }}</td>
               <td>
                 {% if p.urgenza == 'Critico' %}
                   <span class="nbadge nbadge-critico">Critico</span>
@@ -83,8 +90,8 @@
                   <span class="nbadge nbadge-non-urgente">Non urgente</span>
                 {% endif %}
               </td>
-              <td style="color:var(--text-3); font-size:.82rem;">{{ p.autore }}</td>
-              <td style="color:var(--text-3); font-size:.78rem; white-space:nowrap;">
+              <td class="d-none d-md-table-cell" style="color:var(--text-3); font-size:.82rem;">{{ p.autore }}</td>
+              <td class="d-none d-md-table-cell" style="color:var(--text-3); font-size:.78rem; white-space:nowrap;">
                 {{ p.data_ora.strftime("%d/%m/%Y") }}
               </td>
               <td class="text-nowrap">

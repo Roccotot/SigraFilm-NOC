@@ -59,6 +59,7 @@
       </div>
       <p class="ticket-desc mt-2 mb-0">{{ problem.tipo }}</p>
       <div class="ticket-meta mt-1">
+        <strong>{{ problem.città }}</strong> · Sala {{ problem.sala }} ·
         Aperto da <strong>{{ problem.autore }}</strong> il {{ problem.data_ora.strftime("%d/%m/%Y alle %H:%M") }}
       </div>
     </div>
@@ -115,8 +116,16 @@
           <div class="card-body">
             <div class="card-title">Dettagli</div>
             <div class="ticket-detail-row">
+              <span class="ticket-detail-label">Città</span>
+              <span>{{ problem.città }}</span>
+            </div>
+            <div class="ticket-detail-row">
               <span class="ticket-detail-label">Cinema</span>
               <span>{{ problem.cinema }}</span>
+            </div>
+            <div class="ticket-detail-row">
+              <span class="ticket-detail-label">Sala</span>
+              <span>Sala {{ problem.sala }}</span>
             </div>
             <div class="ticket-detail-row">
               <span class="ticket-detail-label">Autore</span>
