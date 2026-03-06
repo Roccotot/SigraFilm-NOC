@@ -27,7 +27,8 @@
           <span class="nav-user-chip">{{ session.get("username") }}</span>
           <a href="{{ url_for('closed_tickets') }}" class="btn btn-outline-light">🗄 Archivio</a>
           {% if session.get("role") == "admin" %}
-            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light">Gestione Utenti</a>
+            <a href="{{ url_for('admin_cinemas') }}" class="btn btn-outline-light">🎬 Cinema</a>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light">Utenti</a>
           {% endif %}
           <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
         </div>
@@ -46,13 +47,6 @@
       {% endif %}
     {% endwith %}
 
-    <!-- Datalist cinema (per autocomplete) -->
-    <datalist id="cinema-list">
-      {% for c in cinemas %}
-        <option value="{{ c }}">
-      {% endfor %}
-    </datalist>
-
     <!-- Form segnalazione problema -->
     <div class="card shadow-sm mb-4">
       <div class="card-body">
@@ -61,8 +55,19 @@
           <div class="row g-3">
             <div class="col-12 col-md-3">
               <label class="form-label">Cinema</label>
-              <input type="text" name="cinema" class="form-control" placeholder="Nome cinema"
-                list="cinema-list" autocomplete="off" required>
+              {% if cinemas %}
+                <select name="cinema" class="form-select" required>
+                  <option value="">— Seleziona —</option>
+                  {% for c in cinemas %}
+                    <option value="{{ c.nome }}">{{ c.nome }}</option>
+                  {% endfor %}
+                </select>
+              {% else %}
+                <div class="alert alert-warning py-2 mb-0" style="font-size:.78rem;">
+                  Nessun cinema disponibile. L'admin deve aggiungerne dalla
+                  <a href="{{ url_for('admin_cinemas') }}">gestione cinema</a>.
+                </div>
+              {% endif %}
             </div>
             <div class="col-12 col-md-5">
               <label class="form-label">Descrizione</label>

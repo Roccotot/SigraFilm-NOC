@@ -52,6 +52,14 @@ class Comment(db.Model):
     testo = db.Column(db.Text, nullable=False)
     data_ora = db.Column(db.DateTime, default=datetime.utcnow)
 
+class Cinema(db.Model):
+    __tablename__ = "cinemas"
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), unique=True, nullable=False)
+
+    def __repr__(self):
+        return f"<Cinema {self.nome}>"
+
 # --- CREAZIONE AUTOMATICA TABELLE + ADMIN ---
 with app.app_context():
     db.create_all()
@@ -61,6 +69,13 @@ with app.app_context():
         db.session.add(admin)
         db.session.commit()
         print("✅ Utente admin creato automaticamente (username: admin / password: admin1234)")
+    # Migra cinema già presenti nei problemi
+    existing_names = {c.nome for c in Cinema.query.all()}
+    for p in Problem.query.all():
+        if p.cinema and p.cinema.strip() and p.cinema.strip() not in existing_names:
+            db.session.add(Cinema(nome=p.cinema.strip()))
+            existing_names.add(p.cinema.strip())
+    db.session.commit()
 
 # --- ROUTES ---
 @app.route("/")
@@ -126,7 +141,7 @@ def dashboard():
         "chiuso":   0,
         "critico":  sum(1 for p in all_problems if p.urgenza == "Critico"),
     }
-    cinemas = sorted(set(p.cinema for p in all_problems if p.cinema))
+    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
 
     return render_template(
         "dashboard.html",
@@ -252,7 +267,8 @@ def edit_problem(problem_id):
         flash("Problema aggiornato con successo.", "success")
         return redirect(url_for("dashboard"))
 
-    return render_template("edit_problem.html", problem=p)
+    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    return render_template("edit_problem.html", problem=p, cinemas=cinemas)
 
 # --- ELIMINA PROBLEMA ---
 @app.route("/problems/<int:problem_id>/delete", methods=["POST"])
@@ -340,6 +356,55 @@ def delete_user(user_id):
     db.session.commit()
     flash(f"Utente '{username}' eliminato.", "success")
     return redirect(url_for("admin_users"))
+
+# --- GESTIONE CINEMA (admin) ---
+@app.route("/admin/cinemas", methods=["GET", "POST"])
+def admin_cinemas():
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        if nome:
+            existing = Cinema.query.filter_by(nome=nome).first()
+            if existing:
+                flash(f"Cinema '{nome}' già presente.", "warning")
+            else:
+                db.session.add(Cinema(nome=nome))
+                db.session.commit()
+                flash(f"Cinema '{nome}' aggiunto.", "success")
+        return redirect(url_for("admin_cinemas"))
+    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    return render_template("cinemas.html", cinemas=cinemas)
+
+@app.route("/admin/cinemas/<int:cinema_id>/edit", methods=["POST"])
+def edit_cinema(cinema_id):
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+    c = db.session.get(Cinema, cinema_id)
+    if not c:
+        abort(404)
+    nuovo_nome = request.form.get("nome", "").strip()
+    if nuovo_nome and nuovo_nome != c.nome:
+        existing = Cinema.query.filter_by(nome=nuovo_nome).first()
+        if existing:
+            flash(f"'{nuovo_nome}' esiste già.", "warning")
+        else:
+            c.nome = nuovo_nome
+            db.session.commit()
+            flash(f"Cinema rinominato in '{nuovo_nome}'.", "success")
+    return redirect(url_for("admin_cinemas"))
+
+@app.route("/admin/cinemas/<int:cinema_id>/delete", methods=["POST"])
+def delete_cinema(cinema_id):
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+    c = db.session.get(Cinema, cinema_id)
+    if c:
+        nome = c.nome
+        db.session.delete(c)
+        db.session.commit()
+        flash(f"Cinema '{nome}' eliminato.", "success")
+    return redirect(url_for("admin_cinemas"))
 
 # --- MAIN ---
 if __name__ == "__main__":
