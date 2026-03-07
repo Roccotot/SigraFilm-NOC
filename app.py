@@ -462,27 +462,29 @@ def admin_cinemas():
     cinemas = Cinema.query.order_by(Cinema.città.asc(), Cinema.nome.asc()).all()
     return render_template("cinemas.html", cinemas=cinemas)
 
-@app.route("/admin/cinemas/<int:cinema_id>/edit", methods=["POST"])
+@app.route("/admin/cinemas/<int:cinema_id>/edit", methods=["GET", "POST"])
 def edit_cinema(cinema_id):
     if session.get("role") != "admin":
         return "Accesso negato", 403
     c = db.session.get(Cinema, cinema_id)
     if not c:
         abort(404)
-    nuovo_nome = request.form.get("nome", "").strip()
-    nuova_città = request.form.get("città", "").strip()
-    num_sale_str = request.form.get("num_sale", "1")
-    try:
-        num_sale = max(1, int(num_sale_str))
-    except ValueError:
-        num_sale = 1
-    if nuovo_nome:
-        c.nome = nuovo_nome
-        c.città = nuova_città
-        c.num_sale = num_sale
-        db.session.commit()
-        flash(f"Cinema '{nuovo_nome}' aggiornato.", "success")
-    return redirect(url_for("admin_cinemas"))
+    if request.method == "POST":
+        nuovo_nome = request.form.get("nome", "").strip()
+        nuova_città = request.form.get("città", "").strip()
+        num_sale_str = request.form.get("num_sale", "1")
+        try:
+            num_sale = max(1, int(num_sale_str))
+        except ValueError:
+            num_sale = 1
+        if nuovo_nome:
+            c.nome = nuovo_nome
+            c.città = nuova_città
+            c.num_sale = num_sale
+            db.session.commit()
+            flash(f"Cinema '{nuovo_nome}' aggiornato.", "success")
+        return redirect(url_for("admin_cinemas"))
+    return render_template("edit_cinema.html", c=c)
 
 @app.route("/admin/cinemas/<int:cinema_id>/delete", methods=["POST"])
 def delete_cinema(cinema_id):
