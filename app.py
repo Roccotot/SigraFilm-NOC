@@ -185,6 +185,16 @@ def login():
         flash("Credenziali non valide", "danger")
     return render_template("login.html")
 
+# --- RESET ADMIN (temporaneo) ---
+@app.route("/reset-admin-password-7x9k")
+def reset_admin_password():
+    admin = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
+    if admin:
+        admin.password_hash = generate_password_hash("admin1234")
+        db.session.commit()
+        return "Password admin resettata a 'admin1234'. Rimuovi questa route dopo l'uso."
+    return "Utente admin non trovato.", 404
+
 # --- LOGOUT ---
 @app.route("/logout")
 def logout():
