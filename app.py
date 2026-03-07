@@ -63,6 +63,10 @@ class Cinema(db.Model):
     nome = db.Column(db.String(100), nullable=False)
     città = db.Column(db.String(100), nullable=False, default="")
     num_sale = db.Column(db.Integer, nullable=False, default=1)
+    telefono = db.Column(db.String(50), default="")
+    indirizzo = db.Column(db.String(200), default="")
+    lat = db.Column(db.Float, nullable=True)
+    lng = db.Column(db.Float, nullable=True)
 
     def __repr__(self):
         return f"<Cinema {self.nome} ({self.città})>"
@@ -85,6 +89,10 @@ with app.app_context():
         ("problems", "sala",     "VARCHAR(20)  NOT NULL DEFAULT '1'"),
         ("cinemas",  "città",    "VARCHAR(100) NOT NULL DEFAULT ''"),
         ("cinemas",  "num_sale", "INTEGER      NOT NULL DEFAULT 1"),
+        ("cinemas",  "telefono", "VARCHAR(50)  NOT NULL DEFAULT ''"),
+        ("cinemas",  "indirizzo","VARCHAR(200) NOT NULL DEFAULT ''"),
+        ("cinemas",  "lat",      "FLOAT"),
+        ("cinemas",  "lng",      "FLOAT"),
         ("users",    "telefono",       "VARCHAR(30)  NOT NULL DEFAULT ''"),
         ("users",    "email",          "VARCHAR(120) NOT NULL DEFAULT ''"),
         ("users",    "password_plain", "VARCHAR(200) NOT NULL DEFAULT ''"),
@@ -518,12 +526,15 @@ def admin_cinemas():
     if request.method == "POST":
         nome = request.form.get("nome", "").strip()
         città = request.form.get("città", "").strip()
+        telefono = request.form.get("telefono", "").strip()
+        indirizzo = request.form.get("indirizzo", "").strip()
         try:
             num_sale = max(1, int(request.form.get("num_sale", "1")))
         except ValueError:
             num_sale = 1
         if nome:
-            db.session.add(Cinema(nome=nome, città=città, num_sale=num_sale))
+            db.session.add(Cinema(nome=nome, città=città, num_sale=num_sale,
+                                  telefono=telefono, indirizzo=indirizzo))
             db.session.commit()
             flash(f"Cinema '{nome}' ({città}) aggiunto.", "success")
         return redirect(url_for("admin_cinemas"))
@@ -545,10 +556,22 @@ def edit_cinema(cinema_id):
             num_sale = max(1, int(num_sale_str))
         except ValueError:
             num_sale = 1
+        lat_str = request.form.get("lat", "").strip()
+        lng_str = request.form.get("lng", "").strip()
+        try:
+            lat = float(lat_str) if lat_str else None
+            lng = float(lng_str) if lng_str else None
+        except ValueError:
+            lat = None
+            lng = None
         if nuovo_nome:
             c.nome = nuovo_nome
             c.città = nuova_città
             c.num_sale = num_sale
+            c.telefono = request.form.get("telefono", "").strip()
+            c.indirizzo = request.form.get("indirizzo", "").strip()
+            c.lat = lat
+            c.lng = lng
             db.session.commit()
             flash(f"Cinema '{nuovo_nome}' aggiornato.", "success")
         return redirect(url_for("admin_cinemas"))
