@@ -672,6 +672,39 @@ select:-webkit-autofill {
   .chat-msg { max-width: 92%; }
 }
 
+/* ─── CHAT COUNTER (dashboard) ─────────────────────── */
+.chat-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  font-size: .75rem;
+  font-weight: 500;
+  color: var(--text-3);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.chat-counter-empty {
+  color: var(--border);
+}
+.chat-counter-unread {
+  color: var(--cyan);
+  font-weight: 700;
+}
+.chat-unread-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 .3rem;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* ─── EMPTY STATE ───────────────────────────────────── */
 .empty-state {
   text-align: center;
