@@ -24,6 +24,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.Text, nullable=False)
+    password_plain = db.Column(db.String(200), default="")
     role = db.Column(db.String(20), default="user")
     telefono = db.Column(db.String(30), default="")
     email = db.Column(db.String(120), default="")
@@ -84,8 +85,9 @@ with app.app_context():
         ("problems", "sala",     "VARCHAR(20)  NOT NULL DEFAULT '1'"),
         ("cinemas",  "città",    "VARCHAR(100) NOT NULL DEFAULT ''"),
         ("cinemas",  "num_sale", "INTEGER      NOT NULL DEFAULT 1"),
-        ("users",    "telefono", "VARCHAR(30)  NOT NULL DEFAULT ''"),
-        ("users",    "email",    "VARCHAR(120) NOT NULL DEFAULT ''"),
+        ("users",    "telefono",       "VARCHAR(30)  NOT NULL DEFAULT ''"),
+        ("users",    "email",          "VARCHAR(120) NOT NULL DEFAULT ''"),
+        ("users",    "password_plain", "VARCHAR(200) NOT NULL DEFAULT ''"),
     ]
     with db.engine.connect() as conn:
         for table, col, col_def in _migrations:
@@ -97,7 +99,7 @@ with app.app_context():
                 conn.rollback()  # colonna già presente, ignora
     admin = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
     if not admin:
-        admin = User(username="admin", password_hash=generate_password_hash("admin1234"), role="admin")
+        admin = User(username="admin", password_hash=generate_password_hash("admin1234"), password_plain="admin1234", role="admin")
         db.session.add(admin)
         db.session.commit()
         print("✅ Utente admin creato automaticamente (username: admin / password: admin1234)")
@@ -448,7 +450,7 @@ def admin_users():
             return redirect(url_for("admin_users"))
 
         u = User(username=username, role=role, password_hash=generate_password_hash(password),
-                 telefono=telefono, email=email)
+                 password_plain=password, telefono=telefono, email=email)
         db.session.add(u)
         db.session.commit()
         flash("Utente creato con successo.", "success")
@@ -473,6 +475,7 @@ def reset_password(user_id):
         abort(404)
 
     u.password_hash = generate_password_hash(new_password)
+    u.password_plain = new_password
     db.session.commit()
     flash(f"Password di '{u.username}' aggiornata con successo.", "success")
     return redirect(url_for("admin_users"))

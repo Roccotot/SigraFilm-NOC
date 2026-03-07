@@ -80,6 +80,7 @@
               <tr>
                 <th>ID</th>
                 <th>Username</th>
+                <th>Password</th>
                 <th>Telefono</th>
                 <th>Email</th>
                 <th>Ruolo</th>
@@ -91,6 +92,7 @@
               <tr>
                 <td style="color:var(--text-3); font-size:.78rem; font-weight:500;">#{{ u.id }}</td>
                 <td style="font-weight:500; color:#fff;">{{ u.username }}</td>
+                <td style="color:var(--text-2); font-size:.82rem; font-family:monospace;">{{ u.password_plain or '—' }}</td>
                 <td style="color:var(--text-2); font-size:.82rem;">{{ u.telefono or '—' }}</td>
                 <td style="color:var(--text-2); font-size:.82rem;">{{ u.email or '—' }}</td>
                 <td>
