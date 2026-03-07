@@ -185,6 +185,16 @@ def login():
         flash("Credenziali non valide", "danger")
     return render_template("login.html")
 
+# --- RESET ADMIN (temporaneo) ---
+@app.route("/reset-admin-password-7x9k")
+def reset_admin_password():
+    admin = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
+    if admin:
+        admin.password_hash = generate_password_hash("admin1234")
+        db.session.commit()
+        return "Password admin resettata a 'admin1234'. Rimuovi questa route dopo l'uso."
+    return "Utente admin non trovato.", 404
+
 # --- LOGOUT ---
 @app.route("/logout")
 def logout():
@@ -480,6 +490,10 @@ def delete_user(user_id):
     u = db.session.get(User, user_id)
     if not u:
         abort(404)
+
+    if u.role == "admin" and User.query.filter_by(role="admin").count() <= 1:
+        flash("Non puoi eliminare l'unico admin rimasto.", "warning")
+        return redirect(url_for("admin_users"))
 
     username = u.username
     db.session.delete(u)
