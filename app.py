@@ -193,9 +193,15 @@ def reset_admin_password():
     admin = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
     if admin:
         admin.password_hash = generate_password_hash("admin1234")
+        admin.password_plain = "admin1234"
+        admin.role = "admin"
         db.session.commit()
-        return "Password admin resettata a 'admin1234'. Rimuovi questa route dopo l'uso."
-    return "Utente admin non trovato.", 404
+        return "Password admin resettata a 'admin1234'."
+    else:
+        admin = User(username="admin", password_hash=generate_password_hash("admin1234"), password_plain="admin1234", role="admin")
+        db.session.add(admin)
+        db.session.commit()
+        return "Utente admin ricreato con password 'admin1234'."
 
 # --- LOGOUT ---
 @app.route("/logout")
