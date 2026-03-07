@@ -481,6 +481,10 @@ def delete_user(user_id):
     if not u:
         abort(404)
 
+    if u.role == "admin" and User.query.filter_by(role="admin").count() <= 1:
+        flash("Non puoi eliminare l'unico admin rimasto.", "warning")
+        return redirect(url_for("admin_users"))
+
     username = u.username
     db.session.delete(u)
     db.session.commit()
