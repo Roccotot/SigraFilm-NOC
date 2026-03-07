@@ -105,7 +105,7 @@
                     class="d-flex flex-wrap gap-2 align-items-center py-1">
                     <input type="text" name="nome" id="einome-{{ c.id }}" class="form-control form-control-sm"
                       placeholder="Nome" required style="max-width:200px;">
-                    <input type="text" name="città" id="eicittà-{{ c.id }}" class="form-control form-control-sm"
+                    <input type="text" name="città" id="eicity-{{ c.id }}" class="form-control form-control-sm"
                       placeholder="Città" required style="max-width:150px;">
                     <input type="number" name="num_sale" id="eisale-{{ c.id }}" class="form-control form-control-sm"
                       min="1" max="30" placeholder="Sale" required style="max-width:80px;">
@@ -139,7 +139,7 @@
     function startEdit(id, nome, città, numSale) {
       document.getElementById("editrow-" + id).classList.remove("d-none");
       document.getElementById("einome-" + id).value = nome;
-      document.getElementById("eicittà-" + id).value = città;
+      document.getElementById("eicity-" + id).value = città;
       document.getElementById("eisale-" + id).value = numSale;
       document.getElementById("einome-" + id).focus();
     }
