@@ -274,8 +274,8 @@
                   <form method="post"
                     action="{{ url_for('delete_problem', problem_id=p.id) }}"
                     class="d-inline d-none d-md-inline">
-                    <button type="submit" class="btn btn-sm btn-danger"
-                      onclick="return confirm('Eliminare questo problema?')">🗑</button>
+                    <button type="submit" class="btn btn-sm btn-secondary"
+                      onclick="return confirm('Archiviare questo ticket?')">🗄</button>
                   </form>
                 {% endif %}
               </td>

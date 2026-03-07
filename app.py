@@ -382,7 +382,7 @@ def edit_problem(problem_id):
     cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
     return render_template("edit_problem.html", problem=p, cinemas=cinemas)
 
-# --- ELIMINA PROBLEMA ---
+# --- ARCHIVIA PROBLEMA (ex elimina) ---
 @app.route("/problems/<int:problem_id>/delete", methods=["POST"])
 def delete_problem(problem_id):
     if "user_id" not in session:
@@ -395,10 +395,25 @@ def delete_problem(problem_id):
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
 
+    p.stato = "Chiuso"
+    db.session.commit()
+    flash("Ticket archiviato.", "success")
+    return redirect(url_for("dashboard"))
+
+# --- ELIMINA DEFINITIVAMENTE (solo admin, da ticket archiviato) ---
+@app.route("/problems/<int:problem_id>/destroy", methods=["POST"])
+def destroy_problem(problem_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    if session["role"] != "admin":
+        return "Accesso negato", 403
+    p = db.session.get(Problem, problem_id)
+    if not p:
+        abort(404)
     db.session.delete(p)
     db.session.commit()
-    flash("Problema eliminato.", "success")
-    return redirect(url_for("dashboard"))
+    flash("Ticket eliminato definitivamente.", "success")
+    return redirect(url_for("closed_tickets"))
 
 # --- GESTIONE UTENTI ---
 @app.route("/users", methods=["GET", "POST"])

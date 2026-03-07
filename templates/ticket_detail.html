@@ -190,7 +190,7 @@
                   <button type="submit" class="btn btn-warning w-100 btn-sm">↩ Riapri ticket</button>
                 </form>
                 <!-- Elimina definitivo -->
-                <form method="post" action="{{ url_for('delete_problem', problem_id=problem.id) }}"
+                <form method="post" action="{{ url_for('destroy_problem', problem_id=problem.id) }}"
                   onsubmit="return confirm('Eliminare definitivamente il ticket #{{ problem.id }}? Questa azione è irreversibile.')">
                   <button type="submit" class="btn btn-danger w-100 btn-sm">🗑 Elimina definitivamente</button>
                 </form>
