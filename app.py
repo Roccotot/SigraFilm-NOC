@@ -66,6 +66,14 @@ class Cinema(db.Model):
     def __repr__(self):
         return f"<Cinema {self.nome} ({self.città})>"
 
+class TicketRead(db.Model):
+    __tablename__ = "ticket_reads"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False)
+    problem_id = db.Column(db.Integer, nullable=False)
+    last_read_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "problem_id", name="uq_user_problem"),)
+
 # --- CREAZIONE AUTOMATICA TABELLE + MIGRAZIONI ---
 with app.app_context():
     db.create_all()
@@ -218,6 +226,20 @@ def dashboard():
     }
     cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
 
+    # Contatori messaggi e non letti per ogni ticket
+    uid = session["user_id"]
+    reads = {tr.problem_id: tr.last_read_at
+             for tr in TicketRead.query.filter_by(user_id=uid).all()}
+    chat_info = {}
+    for p in problems:
+        total = len(p.comments)
+        last_read = reads.get(p.id)
+        if last_read is None:
+            unread = total
+        else:
+            unread = sum(1 for c in p.comments if c.data_ora > last_read)
+        chat_info[p.id] = {"total": total, "unread": unread}
+
     return render_template(
         "dashboard.html",
         problems=problems,
@@ -225,6 +247,7 @@ def dashboard():
         filter_stato=filter_stato,
         stats=stats,
         cinemas=cinemas,
+        chat_info=chat_info,
     )
 
 # --- DETTAGLIO TICKET ---
@@ -238,6 +261,13 @@ def ticket_detail(problem_id):
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
     comments = Comment.query.filter_by(problem_id=p.id).order_by(Comment.data_ora.asc()).all()
+    # Segna il ticket come letto dall'utente corrente
+    tr = TicketRead.query.filter_by(user_id=session["user_id"], problem_id=p.id).first()
+    if tr:
+        tr.last_read_at = datetime.utcnow()
+    else:
+        db.session.add(TicketRead(user_id=session["user_id"], problem_id=p.id))
+    db.session.commit()
     return render_template("ticket_detail.html", problem=p, comments=comments)
 
 # --- AGGIUNGI COMMENTO ---

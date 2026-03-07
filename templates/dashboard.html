@@ -200,6 +200,7 @@
               <th class="d-none d-lg-table-cell">Descrizione</th>
               <th>Urgenza</th>
               <th>Stato</th>
+              <th>Chat</th>
               <th class="d-none d-md-table-cell">Autore</th>
               <th class="d-none d-md-table-cell">Data/Ora</th>
               <th class="sorttable_nosort" style="cursor:default;">Azioni</th>
@@ -241,6 +242,23 @@
                   <span class="nbadge nbadge-in-corso">In corso</span>
                 {% else %}
                   <span class="nbadge nbadge-chiuso">Chiuso</span>
+                {% endif %}
+              </td>
+              <td>
+                {% set ci = chat_info[p.id] %}
+                {% if ci.unread > 0 %}
+                  <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
+                    class="chat-counter chat-counter-unread" title="{{ ci.unread }} messaggi non letti">
+                    💬 {{ ci.total }}
+                    <span class="chat-unread-dot">{{ ci.unread }}</span>
+                  </a>
+                {% elif ci.total > 0 %}
+                  <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
+                    class="chat-counter" title="{{ ci.total }} messaggi">
+                    💬 {{ ci.total }}
+                  </a>
+                {% else %}
+                  <span class="chat-counter chat-counter-empty">—</span>
                 {% endif %}
               </td>
               <td class="d-none d-md-table-cell" style="color:var(--text-2); font-size:.82rem;">{{ p.autore }}</td>
