@@ -684,6 +684,7 @@ def export_excel():
 
     is_admin = session["role"] == "admin"
     username = session["username"]
+    foglio   = request.args.get("foglio", "tutto")  # aperti | chiusi | cinema | utenti | tutto
 
     wb = openpyxl.Workbook()
 
@@ -706,52 +707,63 @@ def export_excel():
     def fmt(dt):
         return dt.strftime("%d/%m/%Y %H:%M") if dt else ""
 
-    # --- Foglio 1: Ticket aperti ---
-    ws1 = wb.active
-    ws1.title = "Ticket Aperti"
-    q = Problem.query.filter(Problem.stato != "Chiuso")
-    if not is_admin:
-        q = q.filter_by(autore=username)
-    style_header(ws1, ["ID", "Cinema", "Città", "Sala", "Descrizione", "Urgenza", "Stato", "Autore", "Data apertura"])
-    for p in q.order_by(Problem.data_ora.desc()).all():
-        ws1.append([p.id, p.cinema, p.città, p.sala, p.tipo, p.urgenza, p.stato, p.autore, fmt(p.data_ora)])
-    autowidth(ws1)
+    first_sheet = True
 
-    # --- Foglio 2: Archivio ---
-    ws2 = wb.create_sheet("Archivio Chiusi")
-    q2 = Problem.query.filter_by(stato="Chiuso")
-    if not is_admin:
-        q2 = q2.filter_by(autore=username)
-    style_header(ws2, ["ID", "Cinema", "Città", "Sala", "Descrizione", "Urgenza", "Autore", "Data apertura", "Chiuso da", "Chiuso il"])
-    for p in q2.order_by(Problem.data_ora.desc()).all():
-        ws2.append([p.id, p.cinema, p.città, p.sala, p.tipo, p.urgenza, p.autore, fmt(p.data_ora), p.chiuso_da or "", fmt(p.chiuso_il)])
-    autowidth(ws2)
+    def new_sheet(title):
+        nonlocal first_sheet
+        if first_sheet:
+            ws = wb.active
+            ws.title = title
+            first_sheet = False
+        else:
+            ws = wb.create_sheet(title)
+        return ws
 
-    # --- Foglio 3: Cinema (solo admin) ---
-    if is_admin:
-        ws3 = wb.create_sheet("Cinema")
-        style_header(ws3, ["ID", "Nome", "Città", "Sale", "Telefono", "Indirizzo", "Lat", "Lng"])
+    if foglio in ("aperti", "tutto"):
+        ws = new_sheet("Ticket Aperti")
+        q = Problem.query.filter(Problem.stato != "Chiuso")
+        if not is_admin:
+            q = q.filter_by(autore=username)
+        style_header(ws, ["ID", "Cinema", "Città", "Sala", "Descrizione", "Urgenza", "Stato", "Autore", "Data apertura"])
+        for p in q.order_by(Problem.data_ora.desc()).all():
+            ws.append([p.id, p.cinema, p.città, p.sala, p.tipo, p.urgenza, p.stato, p.autore, fmt(p.data_ora)])
+        autowidth(ws)
+
+    if foglio in ("chiusi", "tutto"):
+        ws = new_sheet("Archivio Chiusi")
+        q2 = Problem.query.filter_by(stato="Chiuso")
+        if not is_admin:
+            q2 = q2.filter_by(autore=username)
+        style_header(ws, ["ID", "Cinema", "Città", "Sala", "Descrizione", "Urgenza", "Autore", "Data apertura", "Chiuso da", "Chiuso il"])
+        for p in q2.order_by(Problem.data_ora.desc()).all():
+            ws.append([p.id, p.cinema, p.città, p.sala, p.tipo, p.urgenza, p.autore, fmt(p.data_ora), p.chiuso_da or "", fmt(p.chiuso_il)])
+        autowidth(ws)
+
+    if foglio in ("cinema", "tutto") and is_admin:
+        ws = new_sheet("Cinema")
+        style_header(ws, ["ID", "Nome", "Città", "Sale", "Telefono", "Indirizzo", "Lat", "Lng"])
         for c in Cinema.query.order_by(Cinema.città.asc(), Cinema.nome.asc()).all():
-            ws3.append([c.id, c.nome, c.città, c.num_sale, c.telefono or "", c.indirizzo or "", c.lat or "", c.lng or ""])
-        autowidth(ws3)
+            ws.append([c.id, c.nome, c.città, c.num_sale, c.telefono or "", c.indirizzo or "", c.lat or "", c.lng or ""])
+        autowidth(ws)
 
-    # --- Foglio 4: Utenti (solo admin) ---
-    if is_admin:
-        ws4 = wb.create_sheet("Utenti")
-        style_header(ws4, ["ID", "Username", "Ruolo", "Email", "Telefono"])
+    if foglio in ("utenti", "tutto") and is_admin:
+        ws = new_sheet("Utenti")
+        style_header(ws, ["ID", "Username", "Ruolo", "Email", "Telefono"])
         for u in User.query.order_by(User.id.asc()).all():
-            ws4.append([u.id, u.username, u.role, u.email or "", u.telefono or ""])
-        autowidth(ws4)
+            ws.append([u.id, u.username, u.role, u.email or "", u.telefono or ""])
+        autowidth(ws)
 
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
     now = datetime.now().strftime("%Y%m%d_%H%M")
+    nomi = {"aperti": "ticket_aperti", "chiusi": "archivio_chiusi",
+            "cinema": "cinema", "utenti": "utenti", "tutto": "completo"}
     return send_file(
         buf,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
-        download_name=f"sigrafilm_noc_{now}.xlsx",
+        download_name=f"sigrafilm_{nomi.get(foglio, foglio)}_{now}.xlsx",
     )
 
 # --- IMPORT EXCEL ---
