@@ -78,11 +78,11 @@
           <table class="table table-striped table-hover" style="margin:0;">
             <thead class="table-dark">
               <tr>
-                <th>ID</th>
+                <th class="d-none d-md-table-cell">ID</th>
                 <th>Username</th>
-                <th>Password</th>
-                <th>Telefono</th>
-                <th>Email</th>
+                <th class="d-none d-md-table-cell">Password</th>
+                <th class="d-none d-lg-table-cell">Telefono</th>
+                <th class="d-none d-lg-table-cell">Email</th>
                 <th>Ruolo</th>
                 <th>Azioni</th>
               </tr>
@@ -90,11 +90,19 @@
             <tbody>
               {% for u in users %}
               <tr>
-                <td style="color:var(--text-3); font-size:.78rem; font-weight:500;">#{{ u.id }}</td>
-                <td style="font-weight:500; color:#fff;">{{ u.username }}</td>
-                <td style="color:var(--text-2); font-size:.82rem; font-family:monospace;">{{ u.password_plain or '—' }}</td>
-                <td style="color:var(--text-2); font-size:.82rem;">{{ u.telefono or '—' }}</td>
-                <td style="color:var(--text-2); font-size:.82rem;">{{ u.email or '—' }}</td>
+                <td class="d-none d-md-table-cell" style="color:var(--text-3); font-size:.78rem; font-weight:500;">#{{ u.id }}</td>
+                <td style="font-weight:500; color:#fff;">
+                  {{ u.username }}
+                  <!-- Info aggiuntive visibili solo su mobile -->
+                  <div class="d-lg-none" style="font-size:.72rem; color:var(--text-3); font-weight:400; margin-top:.15rem;">
+                    {% if u.telefono %}{{ u.telefono }}{% endif %}
+                    {% if u.telefono and u.email %} · {% endif %}
+                    {% if u.email %}{{ u.email }}{% endif %}
+                  </div>
+                </td>
+                <td class="d-none d-md-table-cell" style="color:var(--text-2); font-size:.82rem; font-family:monospace;">{{ u.password_plain or '—' }}</td>
+                <td class="d-none d-lg-table-cell" style="color:var(--text-2); font-size:.82rem;">{{ u.telefono or '—' }}</td>
+                <td class="d-none d-lg-table-cell" style="color:var(--text-2); font-size:.82rem;">{{ u.email or '—' }}</td>
                 <td>
                   {% if u.role == 'admin' %}
                     <span class="nbadge nbadge-admin">Admin</span>
@@ -107,25 +115,29 @@
                     <a href="{{ url_for('user_detail', user_id=u.id) }}"
                       class="btn btn-sm btn-info me-1" title="Assegna cinema">🎬</a>
                   {% endif %}
+                  <!-- Reset password: visibile solo su desktop -->
                   <form method="post"
                     action="{{ url_for('reset_password', user_id=u.id) }}"
-                    class="d-inline">
+                    class="d-none d-md-inline">
                     <input type="password" name="new_password"
                       placeholder="Nuova password" minlength="8" required
-                      class="form-control d-inline" style="width:140px; vertical-align:middle; margin-right:.35rem;">
-                    <button type="submit" class="btn btn-sm btn-warning">Aggiorna</button>
+                      class="form-control d-inline" style="width:130px; vertical-align:middle; margin-right:.35rem;">
+                    <button type="submit" class="btn btn-sm btn-warning">↺</button>
                   </form>
                   <form method="post"
                     action="{{ url_for('delete_user', user_id=u.id) }}"
                     class="d-inline" style="margin-left:.25rem;">
                     <button type="submit" class="btn btn-sm btn-danger"
-                      onclick="return confirm('Eliminare questo utente?')">Elimina</button>
+                      onclick="return confirm('Eliminare questo utente?')">✕</button>
                   </form>
                 </td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        <div class="d-md-none" style="padding:.6rem 1rem; font-size:.75rem; color:var(--text-3); border-top:1px solid var(--border);">
+          Per il reset password apri il dettaglio utente con 🎬
         </div>
       {% else %}
         <div class="alert alert-info" style="margin:1rem; margin-bottom:1rem;">

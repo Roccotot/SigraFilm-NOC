@@ -55,6 +55,20 @@
       </div>
     {% else %}
 
+    <!-- Reset password -->
+    <div class="card shadow-sm mb-4">
+      <div style="padding:.85rem 1.25rem; border-bottom:1px solid var(--border);">
+        <div class="card-title" style="margin:0;">Reset password</div>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('reset_password', user_id=u.id) }}" class="d-flex gap-2 flex-wrap">
+          <input type="password" name="new_password" placeholder="Nuova password (min 8 caratteri)"
+            minlength="8" required class="form-control noc-field" style="max-width:280px;">
+          <button type="submit" class="btn btn-warning">Aggiorna password</button>
+        </form>
+      </div>
+    </div>
+
     <!-- Form assegnazione cinema -->
     <div class="card shadow-sm">
       <div style="padding:.85rem 1.25rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
