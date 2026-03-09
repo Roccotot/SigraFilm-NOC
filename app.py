@@ -11,6 +11,10 @@ if _db_url.startswith("postgres://"):
     _db_url = _db_url.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,   # testa la connessione prima di usarla
+    "pool_recycle": 280,     # ricicla connessioni ogni ~5 min
+}
 app.secret_key = os.environ.get("SECRET_KEY", "devsecret")
 
 # DEBUG: stampa database usato
@@ -658,6 +662,18 @@ def delete_cinema(cinema_id):
         db.session.commit()
         flash(f"Cinema '{nome}' eliminato.", "success")
     return redirect(url_for("admin_cinemas"))
+
+# --- GESTIONE ERRORI ---
+@app.teardown_appcontext
+def _rollback_on_error(exc):
+    if exc is not None:
+        db.session.rollback()
+
+@app.errorhandler(500)
+def _internal_error(e):
+    db.session.rollback()
+    flash("Errore temporaneo del server. Riprova.", "warning")
+    return redirect(request.referrer or url_for("dashboard"))
 
 # --- MAIN ---
 if __name__ == "__main__":
