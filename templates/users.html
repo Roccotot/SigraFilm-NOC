@@ -103,6 +103,10 @@
                   {% endif %}
                 </td>
                 <td class="text-nowrap">
+                  {% if u.role != 'admin' %}
+                    <a href="{{ url_for('user_detail', user_id=u.id) }}"
+                      class="btn btn-sm btn-info me-1" title="Assegna cinema">🎬</a>
+                  {% endif %}
                   <form method="post"
                     action="{{ url_for('reset_password', user_id=u.id) }}"
                     class="d-inline">

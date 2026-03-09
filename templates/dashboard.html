@@ -87,6 +87,26 @@
         }
         salaSel.disabled = n === 0;
       }
+
+      {% if single_cinema %}
+      // Utente con un solo cinema assegnato: pre-compila il form automaticamente
+      document.addEventListener("DOMContentLoaded", function() {
+        const sc = allCinemas[0];
+        if (!sc) return;
+        const cittaSel = document.getElementById("città-sel");
+        cittaSel.value = sc.città;
+        updateCinema();
+        const cinSel = document.getElementById("cinema-sel");
+        for (let i = 0; i < cinSel.options.length; i++) {
+          if (cinSel.options[i].value === sc.nome) {
+            cinSel.selectedIndex = i;
+            break;
+          }
+        }
+        cinSel.disabled = false;
+        updateSale();
+      });
+      {% endif %}
     </script>
 
     <!-- Form segnalazione problema -->
