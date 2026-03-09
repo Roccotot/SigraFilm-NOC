@@ -63,6 +63,7 @@
               <th>Urgenza</th>
               <th class="d-none d-md-table-cell">Autore</th>
               <th class="d-none d-md-table-cell">Data</th>
+              <th class="d-none d-lg-table-cell">Chiuso</th>
               <th class="sorttable_nosort" style="cursor:default;">Azioni</th>
             </tr>
           </thead>
@@ -94,6 +95,15 @@
               <td class="d-none d-md-table-cell" style="color:var(--text-3); font-size:.82rem;">{{ p.autore }}</td>
               <td class="d-none d-md-table-cell" style="color:var(--text-3); font-size:.78rem; white-space:nowrap;">
                 {{ p.data_ora.strftime("%d/%m/%Y") }}
+              </td>
+              <td class="d-none d-lg-table-cell" style="font-size:.78rem; white-space:nowrap;">
+                {% if p.chiuso_da and p.chiuso_il %}
+                  <span style="color:var(--text-3);">da</span>
+                  <strong style="color:var(--text-2);">{{ p.chiuso_da }}</strong><br>
+                  <span style="color:var(--text-3);">{{ p.chiuso_il.strftime("%d/%m/%Y") }} alle {{ p.chiuso_il.strftime("%H:%M") }}</span>
+                {% else %}
+                  <span style="color:var(--text-3);">—</span>
+                {% endif %}
               </td>
               <td class="text-nowrap">
                 <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
