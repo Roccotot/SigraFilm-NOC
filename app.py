@@ -754,6 +754,132 @@ def export_excel():
         download_name=f"sigrafilm_noc_{now}.xlsx",
     )
 
+# --- IMPORT EXCEL ---
+@app.route("/import/excel", methods=["GET", "POST"])
+def import_excel():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    if session["role"] != "admin":
+        return "Accesso negato", 403
+
+    if request.method == "GET":
+        return render_template("import_excel.html")
+
+    f = request.files.get("file")
+    if not f or not f.filename.endswith(".xlsx"):
+        flash("Carica un file .xlsx valido.", "danger")
+        return redirect(url_for("import_excel"))
+
+    try:
+        wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+    except Exception:
+        flash("File non valido o corrotto.", "danger")
+        return redirect(url_for("import_excel"))
+
+    added_problems = 0
+    skipped_problems = 0
+    added_cinemas = 0
+    skipped_cinemas = 0
+
+    existing_problem_ids = {p.id for p in Problem.query.with_entities(Problem.id).all()}
+    existing_cinema_nomi = {c.nome for c in Cinema.query.with_entities(Cinema.nome).all()}
+
+    def _val(cell):
+        return cell.value if cell.value is not None else ""
+
+    def _parse_dt(val):
+        if not val:
+            return None
+        if isinstance(val, datetime):
+            return val
+        try:
+            return datetime.strptime(str(val), "%d/%m/%Y %H:%M")
+        except Exception:
+            return None
+
+    # Fogli ticket: "Ticket Aperti" e "Archivio Chiusi"
+    for sheet_name in ["Ticket Aperti", "Archivio Chiusi"]:
+        ws = wb[sheet_name] if sheet_name in wb.sheetnames else None
+        if not ws:
+            continue
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < 2:
+            continue
+        for row in rows[1:]:  # salta header
+            if not any(row):
+                continue
+            try:
+                row_id   = int(row[0]) if row[0] else None
+                cinema   = str(row[1] or "").strip()
+                città    = str(row[2] or "").strip()
+                sala     = str(row[3] or "1").strip()
+                tipo     = str(row[4] or "").strip()
+                urgenza  = str(row[5] or "Non urgente").strip()
+                autore   = str(row[7] or "import").strip()
+                data_ora = _parse_dt(row[8]) if len(row) > 8 else None
+                stato    = str(row[6] or "Aperto").strip() if sheet_name == "Ticket Aperti" else "Chiuso"
+                chiuso_da = str(row[9] or "").strip() if len(row) > 9 else None
+                chiuso_il = _parse_dt(row[10]) if len(row) > 10 else None
+            except Exception:
+                continue
+            if not cinema or not tipo:
+                continue
+            if row_id and row_id in existing_problem_ids:
+                skipped_problems += 1
+                continue
+            p = Problem(
+                cinema=cinema, città=città, sala=sala, tipo=tipo,
+                urgenza=urgenza, stato=stato, autore=autore,
+                data_ora=data_ora or datetime.utcnow(),
+                chiuso_da=chiuso_da or None,
+                chiuso_il=chiuso_il,
+            )
+            db.session.add(p)
+            if row_id:
+                existing_problem_ids.add(row_id)
+            added_problems += 1
+
+    # Foglio "Cinema"
+    if "Cinema" in wb.sheetnames:
+        ws = wb["Cinema"]
+        rows = list(ws.iter_rows(values_only=True))
+        for row in rows[1:]:
+            if not any(row):
+                continue
+            try:
+                nome     = str(row[1] or "").strip()
+                città    = str(row[2] or "").strip()
+                num_sale = int(row[3]) if row[3] else 1
+                telefono = str(row[4] or "").strip()
+                indirizzo= str(row[5] or "").strip()
+                lat      = float(row[6]) if row[6] else None
+                lng      = float(row[7]) if row[7] else None
+            except Exception:
+                continue
+            if not nome:
+                continue
+            if nome in existing_cinema_nomi:
+                skipped_cinemas += 1
+                continue
+            db.session.add(Cinema(nome=nome, città=città, num_sale=num_sale,
+                                  telefono=telefono, indirizzo=indirizzo, lat=lat, lng=lng))
+            existing_cinema_nomi.add(nome)
+            added_cinemas += 1
+
+    db.session.commit()
+
+    parts = []
+    if added_problems:   parts.append(f"{added_problems} ticket aggiunti")
+    if skipped_problems: parts.append(f"{skipped_problems} ticket già presenti (saltati)")
+    if added_cinemas:    parts.append(f"{added_cinemas} cinema aggiunti")
+    if skipped_cinemas:  parts.append(f"{skipped_cinemas} cinema già presenti (saltati)")
+    if not parts:
+        flash("Nessuna nuova riga trovata — tutto già presente.", "info")
+    else:
+        flash(" · ".join(parts) + ".", "success")
+
+    return redirect(url_for("import_excel"))
+
 # --- GESTIONE ERRORI ---
 @app.teardown_appcontext
 def _rollback_on_error(exc):
