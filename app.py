@@ -115,6 +115,8 @@ with app.app_context():
         ("users",    "telefono",       "VARCHAR(30)  NOT NULL DEFAULT ''"),
         ("users",    "email",          "VARCHAR(120) NOT NULL DEFAULT ''"),
         ("users",    "password_plain", "VARCHAR(200) NOT NULL DEFAULT ''"),
+        ("problems", "chiuso_da",      "VARCHAR(80)"),
+        ("problems", "chiuso_il",      "DATETIME"),
     ]
     with db.engine.connect() as conn:
         for table, col, col_def in _migrations:
