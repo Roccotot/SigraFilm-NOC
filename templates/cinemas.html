@@ -277,6 +277,7 @@
                 <th style="width:4rem;">Sale</th>
                 <th>Telefono</th>
                 <th>Indirizzo</th>
+                <th class="sorttable_nosort text-center" style="width:5rem;">Ticket</th>
                 <th class="sorttable_nosort text-end" style="width:1px; white-space:nowrap;">Azioni</th>
               </tr>
             </thead>
@@ -296,6 +297,18 @@
                 </td>
                 <td style="color:var(--text-2); font-size:.82rem;" title="{{ c.indirizzo or '' }}">
                   {{ c.indirizzo or '—' }}
+                </td>
+                <td class="text-center">
+                  {% set tks = tickets_map.get(c.nome, []) %}
+                  {% if tks %}
+                    <button class="btn btn-sm btn-outline-danger"
+                      onclick="openTicketModal({{ c.nome|tojson }}, {{ tks|map(attribute='id')|list|tojson }}, {{ tks|map(attribute='sala')|list|tojson }}, {{ tks|map(attribute='tipo')|list|tojson }}, {{ tks|map(attribute='urgenza')|list|tojson }})"
+                      style="font-size:.75rem; font-weight:700; min-width:2.2rem;">
+                      {{ tks|length }}
+                    </button>
+                  {% else %}
+                    <span style="color:var(--text-3); font-size:.8rem;">—</span>
+                  {% endif %}
                 </td>
                 <td class="text-end text-nowrap">
                   <a href="{{ url_for('edit_cinema', cinema_id=c.id) }}"
@@ -404,5 +417,48 @@
     }
   </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Modal ticket aperti -->
+  <div class="modal fade" id="ticketModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content" style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px;">
+        <div class="modal-header" style="border-bottom:1px solid var(--border);">
+          <h5 class="modal-title" style="color:var(--text-1); font-size:.95rem; font-weight:700;" id="ticketModalTitle"></h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="ticketModalBody" style="padding:.75rem;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var _ticketModal = new bootstrap.Modal(document.getElementById('ticketModal'));
+    function openTicketModal(nome, ids, sale, tipi, urgenze) {
+      document.getElementById('ticketModalTitle').textContent = '🎬 ' + nome + ' — Ticket aperti';
+      var urgOrder = { 'Critico': 0, 'Urgente': 1, 'Non urgente': 2 };
+      var urgColor = { 'Critico': 'var(--red)', 'Urgente': 'var(--yellow)', 'Non urgente': 'var(--green)' };
+      // costruisce lista ordinata per urgenza
+      var items = ids.map(function(id, i) {
+        return { id: id, sala: sale[i], tipo: tipi[i], urgenza: urgenze[i] };
+      }).sort(function(a, b) { return (urgOrder[a.urgenza] || 9) - (urgOrder[b.urgenza] || 9); });
+
+      var html = '';
+      items.forEach(function(t) {
+        html += '<a href="/problems/' + t.id + '" style="'
+          + 'display:flex; align-items:center; gap:.5rem; padding:.4rem .55rem;'
+          + 'border-radius:7px; text-decoration:none; margin-bottom:.3rem;'
+          + 'background:var(--bg-input); border:1px solid var(--border); color:var(--text-1);'
+          + 'font-size:.82rem; transition:background .12s;"'
+          + ' onmouseover="this.style.background=\'#2d333b\'" onmouseout="this.style.background=\'var(--bg-input)\'">'
+          + '<span style="color:var(--text-3); font-size:.72rem; flex-shrink:0;">#' + t.id + '</span>'
+          + '<span style="color:var(--text-3); font-size:.72rem; flex-shrink:0;">S.' + t.sala + '</span>'
+          + '<span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + t.tipo + '</span>'
+          + '<span style="font-size:.7rem; font-weight:700; flex-shrink:0; color:' + (urgColor[t.urgenza] || 'var(--text-3)') + ';">' + t.urgenza + '</span>'
+          + '</a>';
+      });
+      document.getElementById('ticketModalBody').innerHTML = html;
+      _ticketModal.show();
+    }
+  </script>
 </body>
 </html>
