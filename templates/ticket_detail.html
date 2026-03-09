@@ -18,13 +18,14 @@
         <span class="nav-user-chip">{{ session.get("username") }}</span>
       </a>
       <div class="d-flex align-items-center gap-2">
-        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm">Dashboard</a>
-        <a href="{{ url_for('closed_tickets') }}" class="btn btn-outline-light btn-sm">Archivio</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm">🏠 Dashboard</a>
+        <a href="{{ url_for('closed_tickets') }}" class="btn btn-outline-light btn-sm">🗄 Archivio</a>
         {% if session.get("role") == "admin" %}
-          <a href="{{ url_for('admin_cinemas') }}" class="btn btn-outline-light btn-sm">Cinema</a>
-          <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light btn-sm">Utenti</a>
+          <a href="{{ url_for('admin_cinemas') }}" class="btn btn-outline-light btn-sm">🎬 Cinema</a>
+          <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light btn-sm">👥 Utenti</a>
         {% endif %}
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm"
+          onclick="return confirm('Sei sicuro di voler uscire?')">🚪 Logout</a>
       </div>
     </div>
   </nav>
