@@ -598,7 +598,16 @@ def admin_cinemas():
             flash(f"Cinema '{nome}' ({città}) aggiunto.", "success")
         return redirect(url_for("admin_cinemas"))
     cinemas = Cinema.query.order_by(Cinema.città.asc(), Cinema.nome.asc()).all()
-    return render_template("cinemas.html", cinemas=cinemas)
+    # Ticket aperti raggruppati per nome cinema
+    _urgency_order = {"Critico": 0, "Urgente": 1, "Non urgente": 2}
+    open_problems = Problem.query.filter(Problem.stato != "Chiuso").all()
+    open_problems.sort(key=lambda p: _urgency_order.get(p.urgenza, 9))
+    tickets_map = {}
+    for p in open_problems:
+        key = (p.cinema or "").strip()
+        if key:
+            tickets_map.setdefault(key, []).append(p)
+    return render_template("cinemas.html", cinemas=cinemas, tickets_map=tickets_map)
 
 @app.route("/admin/cinemas/<int:cinema_id>/edit", methods=["GET", "POST"])
 def edit_cinema(cinema_id):
