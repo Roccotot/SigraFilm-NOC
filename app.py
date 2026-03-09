@@ -269,6 +269,7 @@ def dashboard():
         "chiuso":   0,
         "critico":  sum(1 for p in all_problems if p.urgenza == "Critico"),
     }
+    uid = session["user_id"]
     if session["role"] == "admin":
         cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
     else:
@@ -281,7 +282,6 @@ def dashboard():
     single_cinema = cinemas[0] if len(cinemas) == 1 else None
 
     # Contatori messaggi e non letti per ogni ticket
-    uid = session["user_id"]
     reads = {tr.problem_id: tr.last_read_at
              for tr in TicketRead.query.filter_by(user_id=uid).all()}
     chat_info = {}
