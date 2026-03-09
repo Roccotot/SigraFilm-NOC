@@ -255,8 +255,8 @@
                   <form method="post"
                     action="{{ url_for('delete_cinema', cinema_id=c.id) }}"
                     class="d-inline"
-                    onsubmit="return confirmDelete('{{ c.nome | replace("'", "\\'") }}')">
-                    <button type="submit" class="btn btn-sm btn-danger" title="Elimina cinema">🗑</button>
+                    onsubmit="return confirm('Eliminare {{ c.nome }}?')">
+                    <button type="submit" class="btn btn-sm btn-danger">🗑</button>
                   </form>
                 </td>
               </tr>
@@ -280,17 +280,6 @@
 
   </div>
 
-  <script>
-    function confirmDelete(nome) {
-      var risposta = prompt(
-        '⚠️ Stai per eliminare:\n"' + nome + '"\n\nDigita il nome esatto del cinema per confermare:'
-      );
-      if (risposta === null) return false;          // annullato
-      if (risposta === nome) return true;           // corretto
-      alert('Nome non corrispondente. Eliminazione annullata.');
-      return false;
-    }
-  </script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     var cinemaData = [

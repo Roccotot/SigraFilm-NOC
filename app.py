@@ -71,6 +71,12 @@ class Cinema(db.Model):
     def __repr__(self):
         return f"<Cinema {self.nome} ({self.città})>"
 
+class DeletedCinema(db.Model):
+    """Tombstone: cinema eliminati intenzionalmente — il seed non li re-inserisce."""
+    __tablename__ = "deleted_cinemas"
+    id   = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+
 class TicketRead(db.Model):
     __tablename__ = "ticket_reads"
     id = db.Column(db.Integer, primary_key=True)
@@ -161,9 +167,10 @@ with app.app_context():
         {"nome": "Arena Dentro Le Mura",                 "città": "San Casciano Val di Pesa", "num_sale": 1, "telefono": "",            "indirizzo": "Via Lucardesi 10, 50026 San Casciano Val di Pesa FI", "lat": 43.6563, "lng": 11.1832},
     ]
     _existing_nomi = {c.nome for c in Cinema.query.all()}
+    _deleted_nomi  = {d.nome for d in DeletedCinema.query.all()}
     _added = 0
     for c in _cinemas_seed:
-        if c["nome"] not in _existing_nomi:
+        if c["nome"] not in _existing_nomi and c["nome"] not in _deleted_nomi:
             db.session.add(Cinema(**c))
             _added += 1
     # Aggiorna contatti per cinema già esistenti che non li hanno
@@ -637,6 +644,8 @@ def delete_cinema(cinema_id):
     if c:
         nome = c.nome
         db.session.delete(c)
+        if not DeletedCinema.query.filter_by(nome=nome).first():
+            db.session.add(DeletedCinema(nome=nome))
         db.session.commit()
         flash(f"Cinema '{nome}' eliminato.", "success")
     return redirect(url_for("admin_cinemas"))
