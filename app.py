@@ -11,6 +11,10 @@ if _db_url.startswith("postgres://"):
     _db_url = _db_url.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,   # testa la connessione prima di usarla
+    "pool_recycle": 280,     # ricicla connessioni ogni ~5 min
+}
 app.secret_key = os.environ.get("SECRET_KEY", "devsecret")
 
 # DEBUG: stampa database usato
@@ -41,6 +45,8 @@ class Problem(db.Model):
     tipo = db.Column(db.Text, nullable=False)
     urgenza = db.Column(db.String(50), nullable=False)
     stato = db.Column(db.String(50), default="Aperto")
+    chiuso_da = db.Column(db.String(80), nullable=True)
+    chiuso_il = db.Column(db.DateTime, nullable=True)
     autore = db.Column(db.String(80), nullable=False)
     data_ora = db.Column(db.DateTime, default=datetime.utcnow)
     comments = db.relationship("Comment", backref="problem", cascade="all, delete-orphan", lazy=True)
@@ -366,6 +372,12 @@ def update_ticket(problem_id):
         return "Accesso negato", 403
     nuovo_stato   = request.form.get("stato", p.stato)
     nuova_urgenza = request.form.get("urgenza", p.urgenza)
+    if nuovo_stato == "Chiuso" and p.stato != "Chiuso":
+        p.chiuso_da = session["username"]
+        p.chiuso_il = datetime.utcnow()
+    elif nuovo_stato != "Chiuso":
+        p.chiuso_da = None
+        p.chiuso_il = None
     p.stato   = nuovo_stato
     p.urgenza = nuova_urgenza
     db.session.commit()
@@ -658,6 +670,18 @@ def delete_cinema(cinema_id):
         db.session.commit()
         flash(f"Cinema '{nome}' eliminato.", "success")
     return redirect(url_for("admin_cinemas"))
+
+# --- GESTIONE ERRORI ---
+@app.teardown_appcontext
+def _rollback_on_error(exc):
+    if exc is not None:
+        db.session.rollback()
+
+@app.errorhandler(500)
+def _internal_error(e):
+    db.session.rollback()
+    flash("Errore temporaneo del server. Riprova.", "warning")
+    return redirect(request.referrer or url_for("dashboard"))
 
 # --- MAIN ---
 if __name__ == "__main__":
