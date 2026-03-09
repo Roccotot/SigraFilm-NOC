@@ -213,6 +213,7 @@ textarea.form-control { resize: vertical; }
   --bs-table-striped-bg: transparent;
   --bs-table-hover-bg: transparent;
   --bs-table-border-color: var(--border);
+  --bs-table-color: var(--text-1);
 }
 
 .table thead th {
