@@ -45,7 +45,7 @@
               <input type="text" name="username" class="form-control noc-field" placeholder="Username" required autocomplete="off">
             </div>
             <div class="col-12 col-md-3">
-              <input type="text" name="password" class="form-control noc-field" placeholder="Password (min 8 caratteri)" required>
+              <input type="password" name="password" class="form-control noc-field" placeholder="Password (min 8 caratteri)" required>
             </div>
             <div class="col-6 col-md-2">
               <input type="tel" name="telefono" class="form-control noc-field" placeholder="Telefono">
@@ -106,7 +106,7 @@
                   <form method="post"
                     action="{{ url_for('reset_password', user_id=u.id) }}"
                     class="d-inline">
-                    <input type="text" name="new_password"
+                    <input type="password" name="new_password"
                       placeholder="Nuova password" minlength="8" required
                       class="form-control d-inline" style="width:140px; vertical-align:middle; margin-right:.35rem;">
                     <button type="submit" class="btn btn-sm btn-warning">Aggiorna</button>
