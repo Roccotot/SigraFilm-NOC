@@ -231,15 +231,11 @@
             {% for p in problems %}
             <tr class="{% if p.urgenza == 'Critico' %}row-critico{% elif p.urgenza == 'Urgente' %}row-urgente{% else %}row-non-urgente{% endif %}">
               <td class="d-none d-md-table-cell">
-                <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
-                  style="color:var(--text-3); font-size:.78rem; font-weight:600; text-decoration:none;">
-                  #{{ p.id }}
-                </a>
+                <span style="color:var(--text-3); font-size:.78rem; font-weight:600;">#{{ p.id }}</span>
               </td>
               <td class="d-none d-md-table-cell" style="color:var(--text-2); font-size:.82rem;">{{ p.città }}</td>
               <td style="font-weight:600;">
-                <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
-                  style="color:var(--text-1); text-decoration:none;">{{ p.cinema }}</a>
+                {{ p.cinema }}
                 <div class="d-md-none" style="font-size:.72rem; color:var(--text-3); font-weight:400; margin-top:.15rem;">
                   {{ p.città }} · #{{ p.id }}
                 </div>
@@ -288,7 +284,7 @@
               </td>
               <td class="text-nowrap">
                 <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
-                  class="btn btn-sm btn-secondary me-1 d-md-none">→</a>
+                  class="btn btn-sm btn-success me-1" title="Apri ticket">👁</a>
                 {% if session.get("role") == "admin" or session.get("username") == p.autore %}
                   <a href="{{ url_for('edit_problem', problem_id=p.id) }}"
                     class="btn btn-sm btn-warning me-1 d-none d-md-inline-flex">✏</a>
