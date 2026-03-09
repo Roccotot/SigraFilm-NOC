@@ -733,3 +733,8 @@ select:-webkit-autofill {
   padding-top: .375rem;
   padding-bottom: .375rem;
 }
+
+/* ─── LAYOUT AMPIO (≥1400px / monitor PC) ───────────── */
+@media (min-width: 1400px) {
+  .container { max-width: 1760px; }
+}
