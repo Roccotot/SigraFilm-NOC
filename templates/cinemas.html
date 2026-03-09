@@ -10,7 +10,132 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/sorttable@1.0.2/sorttable.min.js"></script>
   <style>
-    #cinema-map { height: 340px; border-radius: 10px; border: 1px solid #dee2e6; }
+    /* ── Mappa hero ──────────────────────────────────── */
+    #map-hero {
+      position: relative;
+      width: 100%;
+      height: 65vh;
+      min-height: 420px;
+    }
+    #cinema-map {
+      width: 100%;
+      height: 100%;
+    }
+    /* Ombra di separazione */
+    #map-hero::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 60px;
+      background: linear-gradient(to bottom, transparent, var(--bg-base));
+      pointer-events: none;
+      z-index: 500;
+    }
+
+    /* Badge count */
+    #map-count-badge {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 1000;
+      background: rgba(13,17,23,.82);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      font-size: .78rem;
+      font-weight: 500;
+      padding: .3rem .75rem;
+      border-radius: 20px;
+      backdrop-filter: blur(6px);
+      pointer-events: none;
+      letter-spacing: .03em;
+    }
+    #map-count-badge span {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* Label titolo sovrapposta in basso-sinistra */
+    #map-label {
+      position: absolute;
+      bottom: 20px;
+      left: 16px;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    #map-label h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 2px 12px rgba(0,0,0,.9);
+      margin: 0;
+      line-height: 1.2;
+    }
+    #map-label p {
+      font-size: .78rem;
+      color: rgba(255,255,255,.55);
+      margin: .15rem 0 0;
+    }
+
+    /* Marker personalizzato */
+    .cinema-dot {
+      width: 14px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 50%;
+      border: 2.5px solid rgba(255,255,255,.85);
+      box-shadow: 0 0 0 0 rgba(230,57,70,.6);
+      animation: pulse-dot 2.2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%   { box-shadow: 0 0 0 0   rgba(230,57,70,.6); }
+      70%  { box-shadow: 0 0 0 9px rgba(230,57,70,.0); }
+      100% { box-shadow: 0 0 0 0   rgba(230,57,70,.0); }
+    }
+
+    /* Tooltip Leaflet custom */
+    .leaflet-tooltip.cinema-tip {
+      background: rgba(13,17,23,.92) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 8px !important;
+      padding: .55rem .8rem !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,.6) !important;
+      color: var(--text-1) !important;
+      font-family: 'Inter', sans-serif;
+      font-size: .82rem;
+      line-height: 1.55;
+      pointer-events: none;
+      max-width: 260px;
+    }
+    .leaflet-tooltip.cinema-tip::before {
+      border-top-color: var(--border) !important;
+    }
+    .cinema-tip .ct-nome {
+      font-size: .95rem;
+      font-weight: 700;
+      color: #fff;
+      display: block;
+      margin-bottom: .2rem;
+    }
+    .cinema-tip .ct-row {
+      color: var(--text-3);
+      display: block;
+      font-size: .78rem;
+    }
+    .cinema-tip .ct-row strong { color: var(--text-2); }
+
+    /* Leaflet zoom control tema scuro */
+    .leaflet-bar a {
+      background: rgba(22,27,34,.9) !important;
+      color: #fff !important;
+      border-color: var(--border) !important;
+    }
+    .leaflet-bar a:hover { background: var(--bg-input) !important; }
+    .leaflet-control-attribution {
+      background: rgba(13,17,23,.7) !important;
+      color: var(--text-3) !important;
+      font-size: .65rem !important;
+    }
+    .leaflet-control-attribution a { color: var(--cyan) !important; }
   </style>
 </head>
 <body>
@@ -35,6 +160,22 @@
     </div>
   </nav>
 
+  <!-- ── Mappa hero (full width) ───────────────────────── -->
+  {% set map_count = cinemas | selectattr('lat') | list | length %}
+  <div id="map-hero">
+    <div id="cinema-map"></div>
+
+    <div id="map-count-badge">
+      <span>{{ map_count }}</span> cinema sulla mappa
+    </div>
+
+    <div id="map-label">
+      <h2>Gestione Cinema</h2>
+      <p>Passa il cursore su un marker per i dettagli</p>
+    </div>
+  </div>
+
+  <!-- ── Contenuto ─────────────────────────────────────── -->
   <div class="container mt-4">
 
     <!-- Flash messages -->
@@ -43,20 +184,6 @@
         <div class="alert alert-{{ category }} py-2">{{ msg }}</div>
       {% endfor %}{% endif %}
     {% endwith %}
-
-    <h2 class="page-heading mb-4">Gestione Cinema</h2>
-
-    <!-- Mappa cinema -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-body pb-2">
-        <div class="card-title mb-2">Mappa cinema
-          <span class="text-muted" style="font-size:.78rem; font-weight:400;">
-            — solo cinema con coordinate impostate
-          </span>
-        </div>
-        <div id="cinema-map"></div>
-      </div>
-    </div>
 
     <!-- Form aggiunta nuovo cinema -->
     <div class="card shadow-sm mb-4">
@@ -110,7 +237,7 @@
               <tr>
                 <td style="color:var(--text-3); font-size:.75rem;">{{ loop.index }}</td>
                 <td style="color:var(--text-2);">{{ c.città }}</td>
-                <td style="color:var(--text-1);"><strong>{{ c.nome }}</strong></td>
+                <td style="color:var(--text-1);"><strong style="color:var(--text-1);">{{ c.nome }}</strong></td>
                 <td style="color:var(--text-2); font-size:.82rem;">{{ c.num_sale }}</td>
                 <td style="color:var(--text-2); white-space:nowrap;">
                   {% if c.telefono %}
@@ -164,31 +291,52 @@
         nome: {{ c.nome | tojson }},
         città: {{ c.città | tojson }},
         indirizzo: {{ (c.indirizzo or '') | tojson }},
-        telefono: {{ (c.telefono or '') | tojson }}
+        telefono: {{ (c.telefono or '') | tojson }},
+        num_sale: {{ c.num_sale }}
       },
       {% endif %}
       {% endfor %}
     ];
 
-    var map = L.map('cinema-map');
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
+    var map = L.map('cinema-map', { zoomControl: true, attributionControl: true });
+
+    // Tile CartoDB dark matter
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap',
+      subdomains: 'abcd',
+      maxZoom: 19
     }).addTo(map);
+
+    var cinemaIcon = L.divIcon({
+      className: '',
+      html: '<div class="cinema-dot"></div>',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+      tooltipAnchor: [0, -10]
+    });
 
     if (cinemaData.length > 0) {
       var bounds = [];
       cinemaData.forEach(function(c) {
-        var popup = '<strong>' + c.nome + '</strong><br>'
-          + (c.città ? c.città + '<br>' : '')
-          + (c.indirizzo ? '📍 ' + c.indirizzo + '<br>' : '')
-          + (c.telefono ? '📞 <a href="tel:' + c.telefono + '">' + c.telefono + '</a>' : '');
-        L.marker([c.lat, c.lng]).addTo(map).bindPopup(popup);
+        var html = '<span class="ct-nome">🎬 ' + c.nome + '</span>'
+          + '<span class="ct-row"><strong>' + c.città + '</strong>'
+          + (c.num_sale ? ' &nbsp;·&nbsp; ' + c.num_sale + ' sal' + (c.num_sale === 1 ? 'a' : 'e') : '') + '</span>'
+          + (c.indirizzo ? '<span class="ct-row">📍 ' + c.indirizzo + '</span>' : '')
+          + (c.telefono  ? '<span class="ct-row">📞 ' + c.telefono  + '</span>' : '');
+
+        L.marker([c.lat, c.lng], { icon: cinemaIcon })
+          .addTo(map)
+          .bindTooltip(html, {
+            className: 'cinema-tip',
+            direction: 'top',
+            offset: [0, -4],
+            sticky: false
+          });
         bounds.push([c.lat, c.lng]);
       });
-      map.fitBounds(bounds, { padding: [30, 30] });
+      map.fitBounds(bounds, { padding: [60, 60] });
     } else {
-      // Toscana centro
-      map.setView([43.5, 11.0], 8);
+      map.setView([43.5, 11.0], 7);
     }
   </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
