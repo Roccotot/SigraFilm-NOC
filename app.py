@@ -79,6 +79,13 @@ class TicketRead(db.Model):
     last_read_at = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint("user_id", "problem_id", name="uq_user_problem"),)
 
+class UserCinema(db.Model):
+    __tablename__ = "user_cinemas"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    cinema_id = db.Column(db.Integer, db.ForeignKey("cinemas.id", ondelete="CASCADE"), nullable=False)
+    __table_args__ = (db.UniqueConstraint("user_id", "cinema_id", name="uq_user_cinema"),)
+
 # --- CREAZIONE AUTOMATICA TABELLE + MIGRAZIONI ---
 with app.app_context():
     db.create_all()
@@ -262,7 +269,16 @@ def dashboard():
         "chiuso":   0,
         "critico":  sum(1 for p in all_problems if p.urgenza == "Critico"),
     }
-    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    if session["role"] == "admin":
+        cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    else:
+        assigned = UserCinema.query.filter_by(user_id=uid).all()
+        if assigned:
+            cinema_ids = [a.cinema_id for a in assigned]
+            cinemas = Cinema.query.filter(Cinema.id.in_(cinema_ids)).order_by(Cinema.nome.asc()).all()
+        else:
+            cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    single_cinema = cinemas[0] if len(cinemas) == 1 else None
 
     # Contatori messaggi e non letti per ogni ticket
     uid = session["user_id"]
@@ -286,6 +302,7 @@ def dashboard():
         stats=stats,
         cinemas=cinemas,
         chat_info=chat_info,
+        single_cinema=single_cinema,
     )
 
 # --- DETTAGLIO TICKET ---
@@ -484,6 +501,29 @@ def admin_users():
 
     users_list = db.session.execute(db.select(User).order_by(User.id.asc())).scalars().all()
     return render_template("users.html", users=users_list)
+
+# --- DETTAGLIO UTENTE (assegnazione cinema) ---
+@app.route("/users/<int:user_id>", methods=["GET", "POST"])
+def user_detail(user_id):
+    if session.get("role") != "admin":
+        return "Accesso negato", 403
+    u = db.session.get(User, user_id)
+    if not u:
+        abort(404)
+    if request.method == "POST":
+        cinema_ids = request.form.getlist("cinema_ids")
+        UserCinema.query.filter_by(user_id=u.id).delete()
+        for cid in cinema_ids:
+            try:
+                db.session.add(UserCinema(user_id=u.id, cinema_id=int(cid)))
+            except (ValueError, Exception):
+                pass
+        db.session.commit()
+        flash(f"Cinema assegnati a '{u.username}' aggiornati.", "success")
+        return redirect(url_for("user_detail", user_id=u.id))
+    all_cinemas = Cinema.query.order_by(Cinema.città.asc(), Cinema.nome.asc()).all()
+    assigned_ids = {uc.cinema_id for uc in UserCinema.query.filter_by(user_id=u.id).all()}
+    return render_template("user_detail.html", u=u, all_cinemas=all_cinemas, assigned_ids=assigned_ids)
 
 # --- RESET PASSWORD ---
 @app.route("/users/<int:user_id>/reset", methods=["POST"])
