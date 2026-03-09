@@ -227,7 +227,9 @@
           </thead>
           <tbody>
             {% for p in problems %}
-            <tr class="{% if p.urgenza == 'Critico' %}row-critico{% elif p.urgenza == 'Urgente' %}row-urgente{% else %}row-non-urgente{% endif %}">
+            <tr class="{% if p.urgenza == 'Critico' %}row-critico{% elif p.urgenza == 'Urgente' %}row-urgente{% else %}row-non-urgente{% endif %}"
+              style="cursor:pointer;"
+              onclick="window.location='{{ url_for('ticket_detail', problem_id=p.id) }}'">
               <td class="d-none d-md-table-cell">
                 <span style="color:var(--text-3); font-size:.78rem; font-weight:600;">#{{ p.id }}</span>
               </td>
@@ -259,7 +261,7 @@
                   <span class="nbadge nbadge-chiuso">Chiuso</span>
                 {% endif %}
               </td>
-              <td>
+              <td onclick="event.stopPropagation()">
                 {% set ci = chat_info[p.id] %}
                 {% if ci.unread > 0 %}
                   <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
@@ -280,9 +282,7 @@
               <td class="d-none d-md-table-cell" style="color:var(--text-3); font-size:.78rem; white-space:nowrap;">
                 {{ p.data_ora.strftime("%d/%m/%Y %H:%M") }}
               </td>
-              <td class="text-nowrap">
-                <a href="{{ url_for('ticket_detail', problem_id=p.id) }}"
-                  class="btn btn-sm btn-success me-1" title="Apri ticket">👁</a>
+              <td class="text-nowrap" onclick="event.stopPropagation()">
                 {% if session.get("role") == "admin" or session.get("username") == p.autore %}
                   <a href="{{ url_for('edit_problem', problem_id=p.id) }}"
                     class="btn btn-sm btn-warning me-1 d-none d-md-inline-flex">✏</a>
