@@ -28,6 +28,10 @@
           <a href="{{ url_for('admin_cinemas') }}" class="btn btn-outline-light btn-sm">🎬 Cinema</a>
           <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light btn-sm">👥 Utenti</a>
         {% endif %}
+        <a href="{{ url_for('export_excel') }}" class="btn btn-outline-success btn-sm">📥 Excel</a>
+        {%% if session.get("role") == "admin" %%}
+          <a href="{{ url_for('import_excel') }}" class="btn btn-outline-warning btn-sm">📤 Importa</a>
+        {%% endif %%}
         <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm"
           onclick="return confirm('Sei sicuro di voler uscire?')">🚪 Logout</a>
       </div>
