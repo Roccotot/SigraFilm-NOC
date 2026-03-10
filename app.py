@@ -1,8 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
 import io
+import re
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 
@@ -11,6 +13,29 @@ from storage import store
 # --- CONFIGURAZIONE ---
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "devsecret-change-me")
+ALLEGATI_FOLDER = os.path.join(os.path.dirname(__file__), "allegati")
+ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "gif", "bmp", "webp",
+                      "doc", "docx", "xls", "xlsx", "txt", "zip", "mp4", "mov", "avi"}
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+os.makedirs(ALLEGATI_FOLDER, exist_ok=True)
+
+def _cinema_folder(cinema_nome: str) -> str:
+    """Sanitizza il nome cinema per usarlo come cartella."""
+    safe = re.sub(r'[<>:"/\\|?*]', '_', cinema_nome).strip()
+    return safe or "sconosciuto"
+
+def _get_allegati(cinema_nome: str, ticket_id: int) -> list[dict]:
+    folder = os.path.join(ALLEGATI_FOLDER, _cinema_folder(cinema_nome))
+    if not os.path.isdir(folder):
+        return []
+    prefix = f"{ticket_id}_"
+    files = []
+    for fname in sorted(os.listdir(folder)):
+        if fname.startswith(prefix):
+            original = fname[len(prefix):]
+            files.append({"filename": fname, "original": original,
+                          "cinema_folder": _cinema_folder(cinema_nome)})
+    return files
 
 # Inizializza file Excel e dati di default
 store.seed()
@@ -137,8 +162,9 @@ def ticket_detail(problem_id):
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
     comments = store.get_comments(p.id)
+    allegati = _get_allegati(p.cinema, p.id)
     store.upsert_ticket_read(session["user_id"], p.id)
-    return render_template("ticket_detail.html", problem=p, comments=comments)
+    return render_template("ticket_detail.html", problem=p, comments=comments, allegati=allegati)
 
 
 # --- AGGIUNGI COMMENTO ---
@@ -155,6 +181,98 @@ def add_comment(problem_id):
     if testo:
         store.add_comment(p.id, session["username"], session["role"], testo)
     return redirect(url_for("ticket_detail", problem_id=p.id) + "#chat-bottom")
+
+
+# --- UPLOAD ALLEGATO ---
+@app.route("/problems/<int:problem_id>/upload", methods=["POST"])
+def upload_allegato(problem_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    p = store.get_problem_by_id(problem_id)
+    if not p:
+        abort(404)
+    if session["role"] != "admin" and session["username"] != p.autore:
+        return "Accesso negato", 403
+    f = request.files.get("allegato")
+    if not f or not f.filename:
+        flash("Nessun file selezionato.", "warning")
+        return redirect(url_for("ticket_detail", problem_id=problem_id))
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        flash(f"Tipo file non consentito (.{ext}).", "danger")
+        return redirect(url_for("ticket_detail", problem_id=problem_id))
+    f.seek(0, 2)
+    size = f.tell()
+    f.seek(0)
+    if size > MAX_FILE_SIZE:
+        flash("File troppo grande (max 50 MB).", "danger")
+        return redirect(url_for("ticket_detail", problem_id=problem_id))
+    safe_name = secure_filename(f.filename)
+    folder = os.path.join(ALLEGATI_FOLDER, _cinema_folder(p.cinema))
+    os.makedirs(folder, exist_ok=True)
+    dest = os.path.join(folder, f"{problem_id}_{safe_name}")
+    # Se esiste già, aggiungi suffisso numerico
+    if os.path.exists(dest):
+        base, dot_ext = os.path.splitext(f"{problem_id}_{safe_name}")
+        counter = 1
+        while os.path.exists(os.path.join(folder, f"{base}_{counter}{dot_ext}")):
+            counter += 1
+        dest = os.path.join(folder, f"{base}_{counter}{dot_ext}")
+    f.save(dest)
+    flash("Allegato caricato con successo.", "success")
+    return redirect(url_for("ticket_detail", problem_id=problem_id))
+
+
+# --- DOWNLOAD ALLEGATO ---
+@app.route("/allegati/<path:cinema_folder>/<path:filename>")
+def download_allegato(cinema_folder, filename):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    # Sicurezza: no path traversal
+    safe_cinema = secure_filename(cinema_folder)
+    safe_file   = secure_filename(filename)
+    filepath = os.path.join(ALLEGATI_FOLDER, safe_cinema, safe_file)
+    if not os.path.isfile(filepath):
+        abort(404)
+    # Ricava ticket_id dal nome file per verificare accesso
+    try:
+        ticket_id = int(safe_file.split("_")[0])
+        p = store.get_problem_by_id(ticket_id)
+        if p and session["role"] != "admin" and session["username"] != p.autore:
+            return "Accesso negato", 403
+    except (ValueError, IndexError):
+        if session["role"] != "admin":
+            return "Accesso negato", 403
+    return send_file(filepath, as_attachment=True,
+                     download_name=safe_file[len(safe_file.split("_")[0]) + 1:])
+
+
+# --- ELIMINA ALLEGATO ---
+@app.route("/allegati/<path:cinema_folder>/<path:filename>/delete", methods=["POST"])
+def delete_allegato(cinema_folder, filename):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    safe_cinema = secure_filename(cinema_folder)
+    safe_file   = secure_filename(filename)
+    filepath = os.path.join(ALLEGATI_FOLDER, safe_cinema, safe_file)
+    if not os.path.isfile(filepath):
+        abort(404)
+    try:
+        ticket_id = int(safe_file.split("_")[0])
+    except (ValueError, IndexError):
+        ticket_id = None
+    if session["role"] != "admin":
+        if ticket_id:
+            p = store.get_problem_by_id(ticket_id)
+            if not p or session["username"] != p.autore:
+                return "Accesso negato", 403
+        else:
+            return "Accesso negato", 403
+    os.remove(filepath)
+    flash("Allegato eliminato.", "success")
+    if ticket_id:
+        return redirect(url_for("ticket_detail", problem_id=ticket_id))
+    return redirect(url_for("dashboard"))
 
 
 # --- AGGIORNA TICKET (stato/urgenza) ---

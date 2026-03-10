@@ -218,6 +218,47 @@
           {% endif %}
         {% endif %}
 
+        <!-- Allegati -->
+        <div class="card shadow-sm mt-3">
+          <div class="card-body">
+            <div class="card-title">📎 Allegati</div>
+
+            {% if allegati %}
+              <ul class="list-unstyled mb-3" style="font-size:.85rem;">
+                {% for a in allegati %}
+                  <li class="d-flex align-items-center justify-content-between gap-2 mb-1 py-1 border-bottom border-secondary">
+                    <a href="{{ url_for('download_allegato', cinema_folder=a.cinema_folder, filename=a.filename) }}"
+                       class="text-truncate text-info" style="max-width:160px;" title="{{ a.original }}">
+                      {{ a.original }}
+                    </a>
+                    {% if session.get("role") == "admin" or session.get("username") == problem.autore %}
+                      <form method="post"
+                        action="{{ url_for('delete_allegato', cinema_folder=a.cinema_folder, filename=a.filename) }}"
+                        onsubmit="return confirm('Eliminare l\'allegato?')" class="mb-0">
+                        <button type="submit" class="btn btn-link btn-sm text-danger p-0" title="Elimina">🗑</button>
+                      </form>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="text-muted" style="font-size:.8rem;">Nessun allegato.</p>
+            {% endif %}
+
+            {% if session.get("role") == "admin" or session.get("username") == problem.autore %}
+              <form method="post" enctype="multipart/form-data"
+                action="{{ url_for('upload_allegato', problem_id=problem.id) }}">
+                <div class="input-group input-group-sm">
+                  <input type="file" name="allegato" class="form-control form-control-sm" required
+                    accept=".pdf,.png,.jpg,.jpeg,.gif,.bmp,.webp,.doc,.docx,.xls,.xlsx,.txt,.zip,.mp4,.mov,.avi">
+                  <button type="submit" class="btn btn-outline-info btn-sm">Carica</button>
+                </div>
+                <div class="form-text" style="font-size:.7rem;">Max 50 MB · PDF, immagini, Office, video, ZIP</div>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
