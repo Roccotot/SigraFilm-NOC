@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, abort, send_file
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
@@ -7,205 +6,16 @@ import io
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 
+from storage import store
+
 # --- CONFIGURAZIONE ---
 app = Flask(__name__)
-_db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db")
-if _db_url.startswith("postgres://"):
-    _db_url = _db_url.replace("postgres://", "postgresql://", 1)
-app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_pre_ping": True,   # testa la connessione prima di usarla
-    "pool_recycle": 280,     # ricicla connessioni ogni ~5 min
-}
-app.secret_key = os.environ.get("SECRET_KEY", "devsecret")
+app.secret_key = os.environ.get("SECRET_KEY", "devsecret-change-me")
 
-# DEBUG: stampa database usato
-print("📦 DATABASE CONNESSO:", app.config["SQLALCHEMY_DATABASE_URI"])
+# Inizializza file Excel e dati di default
+store.seed()
+print("📂 DATABASE: file Excel in cartella data/")
 
-db = SQLAlchemy(app)
-
-# --- MODELLI ---
-class User(db.Model):
-    __tablename__ = "users"
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.Text, nullable=False)
-    password_plain = db.Column(db.String(200), default="")
-    role = db.Column(db.String(20), default="user")
-    telefono = db.Column(db.String(30), default="")
-    email = db.Column(db.String(120), default="")
-
-    def __repr__(self):
-        return f"<User {self.username}>"
-
-class Problem(db.Model):
-    __tablename__ = "problems"
-    id = db.Column(db.Integer, primary_key=True)
-    cinema = db.Column(db.String(100), nullable=False)
-    città = db.Column(db.String(100), nullable=False, default="")
-    sala = db.Column(db.String(20), nullable=False, default="1")
-    tipo = db.Column(db.Text, nullable=False)
-    urgenza = db.Column(db.String(50), nullable=False)
-    stato = db.Column(db.String(50), default="Aperto")
-    chiuso_da = db.Column(db.String(80), nullable=True)
-    chiuso_il = db.Column(db.DateTime, nullable=True)
-    autore = db.Column(db.String(80), nullable=False)
-    data_ora = db.Column(db.DateTime, default=datetime.utcnow)
-    comments = db.relationship("Comment", backref="problem", cascade="all, delete-orphan", lazy=True)
-
-    def __repr__(self):
-        return f"<Problem {self.id} - {self.tipo[:20]}>"
-
-class Comment(db.Model):
-    __tablename__ = "comments"
-    id = db.Column(db.Integer, primary_key=True)
-    problem_id = db.Column(db.Integer, db.ForeignKey("problems.id", ondelete="CASCADE"), nullable=False)
-    autore = db.Column(db.String(80), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default="user")
-    testo = db.Column(db.Text, nullable=False)
-    data_ora = db.Column(db.DateTime, default=datetime.utcnow)
-
-class Cinema(db.Model):
-    __tablename__ = "cinemas"
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False)
-    città = db.Column(db.String(100), nullable=False, default="")
-    num_sale = db.Column(db.Integer, nullable=False, default=1)
-    telefono = db.Column(db.String(50), default="")
-    indirizzo = db.Column(db.String(200), default="")
-    lat = db.Column(db.Float, nullable=True)
-    lng = db.Column(db.Float, nullable=True)
-
-    def __repr__(self):
-        return f"<Cinema {self.nome} ({self.città})>"
-
-class DeletedCinema(db.Model):
-    """Tombstone: cinema eliminati intenzionalmente — il seed non li re-inserisce."""
-    __tablename__ = "deleted_cinemas"
-    id   = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False, unique=True)
-
-class TicketRead(db.Model):
-    __tablename__ = "ticket_reads"
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, nullable=False)
-    problem_id = db.Column(db.Integer, nullable=False)
-    last_read_at = db.Column(db.DateTime, default=datetime.utcnow)
-    __table_args__ = (db.UniqueConstraint("user_id", "problem_id", name="uq_user_problem"),)
-
-class UserCinema(db.Model):
-    __tablename__ = "user_cinemas"
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    cinema_id = db.Column(db.Integer, db.ForeignKey("cinemas.id", ondelete="CASCADE"), nullable=False)
-    __table_args__ = (db.UniqueConstraint("user_id", "cinema_id", name="uq_user_cinema"),)
-
-# --- CREAZIONE AUTOMATICA TABELLE + MIGRAZIONI ---
-with app.app_context():
-    db.create_all()
-
-    # Migrazione colonne mancanti (ALTER TABLE sicuro)
-    _migrations = [
-        ("problems", "città",    "VARCHAR(100) NOT NULL DEFAULT ''"),
-        ("problems", "sala",     "VARCHAR(20)  NOT NULL DEFAULT '1'"),
-        ("cinemas",  "città",    "VARCHAR(100) NOT NULL DEFAULT ''"),
-        ("cinemas",  "num_sale", "INTEGER      NOT NULL DEFAULT 1"),
-        ("cinemas",  "telefono", "VARCHAR(50)  NOT NULL DEFAULT ''"),
-        ("cinemas",  "indirizzo","VARCHAR(200) NOT NULL DEFAULT ''"),
-        ("cinemas",  "lat",      "FLOAT"),
-        ("cinemas",  "lng",      "FLOAT"),
-        ("users",    "telefono",       "VARCHAR(30)  NOT NULL DEFAULT ''"),
-        ("users",    "email",          "VARCHAR(120) NOT NULL DEFAULT ''"),
-        ("users",    "password_plain", "VARCHAR(200) NOT NULL DEFAULT ''"),
-        ("problems", "chiuso_da",      "VARCHAR(80)"),
-        ("problems", "chiuso_il",      "TIMESTAMP"),
-    ]
-    with db.engine.connect() as conn:
-        for table, col, col_def in _migrations:
-            try:
-                conn.execute(db.text(f'ALTER TABLE {table} ADD COLUMN "{col}" {col_def}'))
-                conn.commit()
-                print(f"✅ Migrazione: {table}.{col} aggiunta")
-            except Exception:
-                conn.rollback()  # colonna già presente, ignora
-    admin = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
-    if not admin:
-        admin = User(username="admin", password_hash=generate_password_hash("admin1234"), password_plain="admin1234", role="admin")
-        db.session.add(admin)
-        db.session.commit()
-        print("✅ Utente admin creato automaticamente (username: admin / password: admin1234)")
-    # Seed cinema — inserisce solo quelli mancanti (funziona su DB vuoto e già popolato)
-    _cinemas_seed = [
-        {"nome": "Cinema Chiusi",                        "città": "Chiusi",                   "num_sale": 6, "telefono": "0578 275077", "indirizzo": "Loc. Querce al Pino, SP 146, 53043 Chiusi SI",         "lat": 43.0025, "lng": 11.9481},
-        {"nome": "Cinema Empoli",                        "città": "Empoli",                   "num_sale": 3, "telefono": "0571 72023",  "indirizzo": "Via Cosimo Ridolfi 75, 50053 Empoli FI",              "lat": 43.7208, "lng": 10.9478},
-        {"nome": "Cinema Firenze",                       "città": "Firenze",                  "num_sale": 1, "telefono": "055 483607",  "indirizzo": "Via G. Romagnosi 46, 50134 Firenze FI",               "lat": 43.7835, "lng": 11.2427},
-        {"nome": "Cinema Odeon",                         "città": "Firenze",                  "num_sale": 1, "telefono": "055 214068",  "indirizzo": "Piazza degli Strozzi 2, 50123 Firenze FI",            "lat": 43.7711, "lng": 11.2519},
-        {"nome": "Cinema Grosseto",                      "città": "Grosseto",                 "num_sale": 4, "telefono": "0564 27069",  "indirizzo": "Via Goffredo Mameli 24, 58100 Grosseto GR",           "lat": 42.7641, "lng": 11.1086},
-        {"nome": "Cinema Massa",                         "città": "Massa",                    "num_sale": 7, "telefono": "0585 791105", "indirizzo": "Via Dorsale 11, 54100 Massa MS",                      "lat": 44.0181, "lng": 10.1327},
-        {"nome": "Cinema Montecatini",                   "città": "Montecatini Terme",        "num_sale": 4, "telefono": "0572 78510",  "indirizzo": "Piazza Massimo D'Azeglio 5, 51016 Montecatini Terme PT", "lat": 43.8849, "lng": 10.7722},
-        {"nome": "Cinema Pisa",                          "città": "Pisa",                     "num_sale": 3, "telefono": "050 5552261", "indirizzo": "Via Piave 47, 56123 Pisa PI",                         "lat": 43.7155, "lng": 10.3986},
-        {"nome": "Cinecity Pisa",                        "città": "Pisa",                     "num_sale": 5, "telefono": "392 323 3535","indirizzo": "Piazza della Stazione 16, 56125 Pisa PI",             "lat": 43.7090, "lng": 10.3972},
-        {"nome": "Cinema Sansepolcro",                   "città": "Sansepolcro",              "num_sale": 1, "telefono": "0575 733433", "indirizzo": "Via XX Settembre 156, 52037 Sansepolcro AR",           "lat": 43.5695, "lng": 12.1406},
-        {"nome": "ELIA ANTICA MULTISALA",                "città": "Grosseto",                 "num_sale": 4, "telefono": "0564 644987", "indirizzo": "Via Aurelia Antica 46, 58100 Grosseto GR",            "lat": 42.7548, "lng": 11.0931},
-        {"nome": "Cinema Scuderie Granducali Seravezza", "città": "Seravezza",                "num_sale": 1, "telefono": "0584 840409", "indirizzo": "Viale Leonetto Amedei 124, 55047 Seravezza LU",       "lat": 43.9962, "lng": 10.2321},
-        {"nome": "Teatro Cinema Giotto",                 "città": "Borgo San Lorenzo",        "num_sale": 1, "telefono": "055 845 9658","indirizzo": "Corso Giacomo Matteotti 151, 50032 Borgo San Lorenzo FI", "lat": 43.9548, "lng": 11.3855},
-        {"nome": "Cinema Metropolitan",                  "città": "Piombino",                 "num_sale": 1, "telefono": "0565 30385",  "indirizzo": "Piazza Cappelletti 2, 57025 Piombino LI",             "lat": 42.9225, "lng": 10.5320},
-        {"nome": "Cinema Multisala Excelsior",           "città": "Montecatini Terme",        "num_sale": 2, "telefono": "0572 904289", "indirizzo": "Viale Giuseppe Verdi 66, 51016 Montecatini Terme PT", "lat": 43.8825, "lng": 10.7740},
-        {"nome": "Cinema Teatro Scipione Ammirato",      "città": "Montaione",                "num_sale": 1, "telefono": "0571 61517",  "indirizzo": "Piazza Gramsci 2, 50050 Montaione FI",                "lat": 43.5595, "lng": 10.9126},
-        {"nome": "Multisala Isola Verde",                "città": "Pisa",                     "num_sale": 3, "telefono": "050 973676",  "indirizzo": "Via Vittorio Frascani, 56124 Pisa PI",                "lat": 43.7024, "lng": 10.3912},
-        {"nome": "Cinema Sala Esse",                     "città": "Firenze",                  "num_sale": 1, "telefono": "055 666643",  "indirizzo": "Via del Ghirlandaio 38, 50121 Firenze FI",            "lat": 43.7697, "lng": 11.2763},
-        {"nome": "Multisala Goldoni",                    "città": "Viareggio",                "num_sale": 2, "telefono": "0584 49832",  "indirizzo": "Via San Francesco 124, 55049 Viareggio LU",           "lat": 43.8682, "lng": 10.2547},
-        {"nome": "Cinema Multisala Il Portico",          "città": "Firenze",                  "num_sale": 2, "telefono": "055 669930",  "indirizzo": "Via Capo di Mondo 66, 50136 Firenze FI",              "lat": 43.7698, "lng": 11.2919},
-        {"nome": "Cinema Teatro Everest Galluzzo",       "città": "Firenze",                  "num_sale": 1, "telefono": "055 232 1754","indirizzo": "Via Volterrana 4, 50124 Firenze FI",                  "lat": 43.7388, "lng": 11.2413},
-        {"nome": "Spazio Alfieri Cinema Teatro Bistrò",  "città": "Firenze",                  "num_sale": 1, "telefono": "055 5320840", "indirizzo": "Via dell'Ulivo 8, 50122 Firenze FI",                  "lat": 43.7703, "lng": 11.2639},
-        {"nome": "Cinema Teatro Multisala Imperiale",    "città": "Montecatini Terme",        "num_sale": 4, "telefono": "0572 508601", "indirizzo": "Piazza Massimo D'Azeglio 5, 51016 Montecatini Terme PT", "lat": 43.8849, "lng": 10.7722},
-        {"nome": "Cinema Centrale",                      "città": "Viareggio",                "num_sale": 1, "telefono": "0584 581226", "indirizzo": "Via Cesare Battisti 67, 55049 Viareggio LU",          "lat": 43.8707, "lng": 10.2534},
-        {"nome": "Cinema Nuova Aurora",                  "città": "Sansepolcro",              "num_sale": 1, "telefono": "0575 1480629","indirizzo": "Via Piero della Francesca 47, 52037 Sansepolcro AR",  "lat": 43.5696, "lng": 12.1393},
-        {"nome": "Cinema Marconi",                       "città": "Firenze",                  "num_sale": 3, "telefono": "055 680554",  "indirizzo": "Viale Giannotti 45r, 50126 Firenze FI",               "lat": 43.7526, "lng": 11.2694},
-        {"nome": "Multisala Splendor",                   "città": "Massa",                    "num_sale": 7, "telefono": "0585 791105", "indirizzo": "Via Dorsale 11, 54100 Massa MS",                      "lat": 44.0181, "lng": 10.1327},
-        {"nome": "Teatro dei Servi",                     "città": "Massa",                    "num_sale": 1, "telefono": "0585 811973", "indirizzo": "Via Palestro 37, 54100 Massa MS",                     "lat": 44.0300, "lng": 10.1406},
-        {"nome": "Multisala Odeon",                      "città": "Pisa",                     "num_sale": 4, "telefono": "050 540168",  "indirizzo": "Piazza S. Paolo all'Orto 18, 56127 Pisa PI",          "lat": 43.7188, "lng": 10.4040},
-        {"nome": "Cinema Caffè Lanteri",                 "città": "Pisa",                     "num_sale": 1, "telefono": "050 577100",  "indirizzo": "Via San Michele degli Scalzi 46, 56124 Pisa PI",      "lat": 43.7188, "lng": 10.4180},
-        {"nome": "Cinema Teatro 4 Mori",                 "città": "Livorno",                  "num_sale": 1, "telefono": "342 543 1247","indirizzo": "Via Pietro Tacca 16, 57123 Livorno LI",               "lat": 43.5498, "lng": 10.3122},
-        {"nome": "Multisala Eden",                       "città": "Arezzo",                   "num_sale": 2, "telefono": "0575 353364", "indirizzo": "Via Antonio Guadagnoli 2, 52100 Arezzo AR",            "lat": 43.4632, "lng": 11.8792},
-        {"nome": "Nuovo Cinema Caporali",                "città": "Castiglione del Lago",     "num_sale": 3, "telefono": "075 965 3152","indirizzo": "Piazzetta San Domenico 1, 06061 Castiglione del Lago PG", "lat": 43.1200, "lng": 12.0557},
-        {"nome": "Cinema Teatro Verdi",                  "città": "San Vincenzo",             "num_sale": 1, "telefono": "0565 701918", "indirizzo": "Via Vittorio Emanuele II 121, 57027 San Vincenzo LI",  "lat": 43.0990, "lng": 10.5398},
-        {"nome": "Teatro Signorelli",                    "città": "Cortona",                  "num_sale": 1, "telefono": "0575 601882", "indirizzo": "Piazza Signorelli 13, 52044 Cortona AR",               "lat": 43.2763, "lng": 11.9876},
-        {"nome": "Cinema Città di Villafranca",          "città": "Villafranca in Lunigiana", "num_sale": 1, "telefono": "0187 498011", "indirizzo": "Via Roma 2, 54028 Villafranca in Lunigiana MS",        "lat": 44.3035, "lng":  9.9536},
-        {"nome": "Cinema Teatro Excelsior",              "città": "Reggello",                 "num_sale": 1, "telefono": "055 869190",  "indirizzo": "Via Dante Alighieri 7, 50066 Reggello FI",            "lat": 43.6845, "lng": 11.5340},
-        {"nome": "Cinema Arena Ardenza",                 "città": "Livorno",                  "num_sale": 1, "telefono": "0586 501403", "indirizzo": "Piazza Sforzini 17, 57128 Livorno LI",                "lat": 43.4980, "lng": 10.3350},
-        {"nome": "Arena Dentro Le Mura",                 "città": "San Casciano Val di Pesa", "num_sale": 1, "telefono": "",            "indirizzo": "Via Lucardesi 10, 50026 San Casciano Val di Pesa FI", "lat": 43.6563, "lng": 11.1832},
-    ]
-    _existing_nomi = {c.nome for c in Cinema.query.all()}
-    _deleted_nomi  = {d.nome for d in DeletedCinema.query.all()}
-    _added = 0
-    for c in _cinemas_seed:
-        if c["nome"] not in _existing_nomi and c["nome"] not in _deleted_nomi:
-            db.session.add(Cinema(**c))
-            _added += 1
-    # Aggiorna contatti per cinema già esistenti che non li hanno
-    _updated = 0
-    _cinema_map = {c.nome: c for c in Cinema.query.all()}
-    for s in _cinemas_seed:
-        existing = _cinema_map.get(s["nome"])
-        if existing and not existing.indirizzo:
-            existing.indirizzo = s.get("indirizzo", "")
-            existing.telefono  = s.get("telefono", "")
-            existing.lat       = s.get("lat")
-            existing.lng       = s.get("lng")
-            _updated += 1
-    if _added or _updated:
-        db.session.commit()
-        if _added:   print(f"✅ {_added} cinema aggiunti al catalogo")
-        if _updated: print(f"✅ {_updated} cinema aggiornati con contatti")
-    # Migra cinema dai problemi esistenti non ancora in tabella
-    existing_nomi = {c.nome for c in Cinema.query.all()}  # ricarica dopo seed
-    for p in Problem.query.all():
-        if p.cinema and p.cinema.strip() and p.cinema.strip() not in existing_nomi:
-            db.session.add(Cinema(nome=p.cinema.strip(), città="", num_sale=1))
-            existing_nomi.add(p.cinema.strip())
-    db.session.commit()
 
 # --- ROUTES ---
 @app.route("/")
@@ -214,39 +24,37 @@ def index():
         return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
 
+
 # --- LOGIN ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form["username"].strip()
         password = request.form["password"]
-
-        u = db.session.execute(db.select(User).filter_by(username=username)).scalar()
+        u = store.get_user_by_username(username)
         if u and check_password_hash(u.password_hash, password):
             session["user_id"] = u.id
             session["role"] = u.role
             session["username"] = u.username
             flash("Login effettuato", "success")
             return redirect(url_for("dashboard"))
-
         flash("Credenziali non valide", "danger")
     return render_template("login.html")
 
-# --- RESET ADMIN (temporaneo) ---
+
+# --- RESET ADMIN (emergenza) ---
 @app.route("/reset-admin-password-7x9k")
 def reset_admin_password():
-    admin = db.session.execute(db.select(User).filter_by(username="admin")).scalar()
-    if admin:
-        admin.password_hash = generate_password_hash("admin1234")
-        admin.password_plain = "admin1234"
-        admin.role = "admin"
-        db.session.commit()
+    u = store.get_user_by_username("admin")
+    if u:
+        u.password_hash = generate_password_hash("admin1234")
+        u.password_plain = "admin1234"
+        u.role = "admin"
+        store.update_user(u)
         return "Password admin resettata a 'admin1234'."
-    else:
-        admin = User(username="admin", password_hash=generate_password_hash("admin1234"), password_plain="admin1234", role="admin")
-        db.session.add(admin)
-        db.session.commit()
-        return "Utente admin ricreato con password 'admin1234'."
+    store.create_user("admin", generate_password_hash("admin1234"), "admin1234", "admin")
+    return "Utente admin ricreato con password 'admin1234'."
+
 
 # --- LOGOUT ---
 @app.route("/logout")
@@ -255,6 +63,7 @@ def logout():
     flash("Logout effettuato", "info")
     return redirect(url_for("login"))
 
+
 # --- DASHBOARD ---
 @app.route("/dashboard")
 def dashboard():
@@ -262,54 +71,47 @@ def dashboard():
         return redirect(url_for("login"))
 
     filter_urgenza = request.args.get("filter_urgenza", "")
-    filter_stato = request.args.get("filter_stato", "")
-
-    query = Problem.query.filter(Problem.stato != "Chiuso")
-    if session["role"] != "admin":
-        query = query.filter_by(autore=session["username"])
-    if filter_urgenza:
-        query = query.filter_by(urgenza=filter_urgenza)
-    if filter_stato:
-        query = query.filter_by(stato=filter_stato)
-
-    problems = query.order_by(Problem.data_ora.desc()).all()
-
-    # Stats e cinemas dalla lista non filtrata (scope utente, escluso chiusi)
-    base_query = Problem.query.filter(Problem.stato != "Chiuso")
-    if session["role"] != "admin":
-        base_query = base_query.filter_by(autore=session["username"])
-    all_problems = base_query.all()
-
-    stats = {
-        "total":    len(all_problems),
-        "aperto":   sum(1 for p in all_problems if p.stato == "Aperto"),
-        "in_corso": sum(1 for p in all_problems if p.stato == "In corso"),
-        "chiuso":   0,
-        "critico":  sum(1 for p in all_problems if p.urgenza == "Critico"),
-    }
+    filter_stato   = request.args.get("filter_stato", "")
     uid = session["user_id"]
+
+    problems = store.get_problems_filtered(
+        stato_ne="Chiuso",
+        autore=session["username"] if session["role"] != "admin" else None,
+        urgenza=filter_urgenza or None,
+        stato_eq=filter_stato or None,
+    )
+
+    all_open = store.get_problems_filtered(
+        stato_ne="Chiuso",
+        autore=session["username"] if session["role"] != "admin" else None,
+    )
+    stats = {
+        "total":    len(all_open),
+        "aperto":   sum(1 for p in all_open if p.stato == "Aperto"),
+        "in_corso": sum(1 for p in all_open if p.stato == "In corso"),
+        "chiuso":   0,
+        "critico":  sum(1 for p in all_open if p.urgenza == "Critico"),
+    }
+
     if session["role"] == "admin":
-        cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+        cinemas = store.get_all_cinemas()
     else:
-        assigned = UserCinema.query.filter_by(user_id=uid).all()
-        if assigned:
-            cinema_ids = [a.cinema_id for a in assigned]
-            cinemas = Cinema.query.filter(Cinema.id.in_(cinema_ids)).order_by(Cinema.nome.asc()).all()
-        else:
-            cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+        assigned_ids = store.get_cinema_ids_for_user(uid)
+        cinemas = store.get_cinemas_by_ids(assigned_ids) if assigned_ids else store.get_all_cinemas()
+    cinemas.sort(key=lambda c: c.nome)
     single_cinema = cinemas[0] if len(cinemas) == 1 else None
 
-    # Contatori messaggi e non letti per ogni ticket
-    reads = {tr.problem_id: tr.last_read_at
-             for tr in TicketRead.query.filter_by(user_id=uid).all()}
+    # Contatori messaggi non letti
+    reads = store.get_reads_by_user(uid)
     chat_info = {}
     for p in problems:
-        total = len(p.comments)
+        comments = store.get_comments(p.id)
+        total = len(comments)
         last_read = reads.get(p.id)
         if last_read is None:
             unread = total
         else:
-            unread = sum(1 for c in p.comments if c.data_ora > last_read)
+            unread = sum(1 for c in comments if c.data_ora and c.data_ora > last_read)
         chat_info[p.id] = {"total": total, "unread": unread}
 
     return render_template(
@@ -323,54 +125,44 @@ def dashboard():
         single_cinema=single_cinema,
     )
 
+
 # --- DETTAGLIO TICKET ---
 @app.route("/problems/<int:problem_id>", methods=["GET"])
 def ticket_detail(problem_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
-    p = db.session.get(Problem, problem_id)
+    p = store.get_problem_by_id(problem_id)
     if not p:
         abort(404)
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
-    comments = Comment.query.filter_by(problem_id=p.id).order_by(Comment.data_ora.asc()).all()
-    # Segna il ticket come letto dall'utente corrente
-    tr = TicketRead.query.filter_by(user_id=session["user_id"], problem_id=p.id).first()
-    if tr:
-        tr.last_read_at = datetime.utcnow()
-    else:
-        db.session.add(TicketRead(user_id=session["user_id"], problem_id=p.id))
-    db.session.commit()
+    comments = store.get_comments(p.id)
+    store.upsert_ticket_read(session["user_id"], p.id)
     return render_template("ticket_detail.html", problem=p, comments=comments)
+
 
 # --- AGGIUNGI COMMENTO ---
 @app.route("/problems/<int:problem_id>/comment", methods=["POST"])
 def add_comment(problem_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
-    p = db.session.get(Problem, problem_id)
+    p = store.get_problem_by_id(problem_id)
     if not p:
         abort(404)
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
     testo = request.form.get("testo", "").strip()
     if testo:
-        c = Comment(
-            problem_id=p.id,
-            autore=session["username"],
-            role=session["role"],
-            testo=testo,
-        )
-        db.session.add(c)
-        db.session.commit()
+        store.add_comment(p.id, session["username"], session["role"], testo)
     return redirect(url_for("ticket_detail", problem_id=p.id) + "#chat-bottom")
+
 
 # --- AGGIORNA TICKET (stato/urgenza) ---
 @app.route("/problems/<int:problem_id>/update", methods=["POST"])
 def update_ticket(problem_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
-    p = db.session.get(Problem, problem_id)
+    p = store.get_problem_by_id(problem_id)
     if not p:
         abort(404)
     if session["role"] != "admin" and session["username"] != p.autore:
@@ -385,239 +177,205 @@ def update_ticket(problem_id):
         p.chiuso_il = None
     p.stato   = nuovo_stato
     p.urgenza = nuova_urgenza
-    db.session.commit()
+    store.update_problem(p)
     flash("Ticket aggiornato.", "success")
     if nuovo_stato == "Chiuso":
         return redirect(url_for("closed_tickets"))
     return redirect(url_for("ticket_detail", problem_id=p.id))
+
 
 # --- ARCHIVIO TICKET CHIUSI ---
 @app.route("/closed")
 def closed_tickets():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    query = Problem.query.filter_by(stato="Chiuso")
-    if session["role"] != "admin":
-        query = query.filter_by(autore=session["username"])
-    problems = query.order_by(Problem.data_ora.desc()).all()
+    problems = store.get_problems_filtered(
+        stato_eq="Chiuso",
+        autore=session["username"] if session["role"] != "admin" else None,
+    )
     return render_template("closed_tickets.html", problems=problems)
+
 
 # --- AGGIUNGI PROBLEMA ---
 @app.route("/problems/add", methods=["POST"])
 def add_problem():
     if "user_id" not in session:
         return redirect(url_for("login"))
-
     cinema_nome = request.form.get("cinema", "").strip()
-    sala = request.form.get("sala", "1").strip()
-    tipo = request.form.get("tipo", "").strip()
+    sala    = request.form.get("sala", "1").strip()
+    tipo    = request.form.get("tipo", "").strip()
     urgenza = request.form.get("urgenza", "Non urgente")
-    stato = request.form.get("stato", "Aperto")
-
+    stato   = request.form.get("stato", "Aperto")
     if not cinema_nome or not tipo:
         flash("Compila tutti i campi.", "danger")
         return redirect(url_for("dashboard"))
-
-    # Recupera città dal cinema selezionato
-    cinema_obj = Cinema.query.filter_by(nome=cinema_nome).first()
+    cinema_obj = store.get_cinema_by_nome(cinema_nome)
     città = cinema_obj.città if cinema_obj else ""
-
-    p = Problem(
-        cinema=cinema_nome,
-        città=città,
-        sala=sala,
-        tipo=tipo,
-        urgenza=urgenza,
-        stato=stato,
-        autore=session["username"],
-    )
-    db.session.add(p)
-    db.session.commit()
+    store.create_problem(cinema=cinema_nome, città=città, sala=sala,
+                         tipo=tipo, urgenza=urgenza, stato=stato,
+                         autore=session["username"])
     flash("Problema aggiunto con successo.", "success")
     return redirect(url_for("dashboard"))
+
 
 # --- MODIFICA PROBLEMA ---
 @app.route("/problems/<int:problem_id>/edit", methods=["GET", "POST"])
 def edit_problem(problem_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
-
-    p = db.session.get(Problem, problem_id)
+    p = store.get_problem_by_id(problem_id)
     if not p:
         abort(404)
-
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
-
     if request.method == "POST":
-        p.cinema = request.form.get("cinema", p.cinema)
-        p.tipo = request.form.get("tipo", p.tipo)
+        p.cinema  = request.form.get("cinema", p.cinema)
+        p.tipo    = request.form.get("tipo", p.tipo)
         p.urgenza = request.form.get("urgenza", p.urgenza)
-        p.stato = request.form.get("stato", p.stato)
-        db.session.commit()
+        p.stato   = request.form.get("stato", p.stato)
+        store.update_problem(p)
         flash("Problema aggiornato con successo.", "success")
         return redirect(url_for("dashboard"))
-
-    cinemas = Cinema.query.order_by(Cinema.nome.asc()).all()
+    cinemas = store.get_all_cinemas()
     return render_template("edit_problem.html", problem=p, cinemas=cinemas)
 
-# --- ARCHIVIA PROBLEMA (ex elimina) ---
+
+# --- ARCHIVIA PROBLEMA ---
 @app.route("/problems/<int:problem_id>/delete", methods=["POST"])
 def delete_problem(problem_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
-
-    p = db.session.get(Problem, problem_id)
+    p = store.get_problem_by_id(problem_id)
     if not p:
         abort(404)
-
     if session["role"] != "admin" and session["username"] != p.autore:
         return "Accesso negato", 403
-
     p.stato = "Chiuso"
-    db.session.commit()
+    store.update_problem(p)
     flash("Ticket archiviato.", "success")
     return redirect(url_for("dashboard"))
 
-# --- ELIMINA DEFINITIVAMENTE (solo admin, da ticket archiviato) ---
+
+# --- ELIMINA DEFINITIVAMENTE (solo admin) ---
 @app.route("/problems/<int:problem_id>/destroy", methods=["POST"])
 def destroy_problem(problem_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
     if session["role"] != "admin":
         return "Accesso negato", 403
-    p = db.session.get(Problem, problem_id)
+    p = store.get_problem_by_id(problem_id)
     if not p:
         abort(404)
-    db.session.delete(p)
-    db.session.commit()
+    store.delete_problem(problem_id)
     flash("Ticket eliminato definitivamente.", "success")
     return redirect(url_for("closed_tickets"))
+
 
 # --- GESTIONE UTENTI ---
 @app.route("/users", methods=["GET", "POST"])
 def admin_users():
     if session.get("role") != "admin":
         return "Accesso negato", 403
-
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        role = request.form.get("role", "user")
+        role     = request.form.get("role", "user")
         telefono = request.form.get("telefono", "").strip()
-        email = request.form.get("email", "").strip()
-
+        email    = request.form.get("email", "").strip()
         if not username or len(password) < 8:
             flash("Username obbligatorio e password di almeno 8 caratteri.", "danger")
             return redirect(url_for("admin_users"))
-
-        existing = db.session.execute(db.select(User).filter_by(username=username)).scalar()
-        if existing:
+        if store.get_user_by_username(username):
             flash("Username già in uso.", "warning")
             return redirect(url_for("admin_users"))
-
-        u = User(username=username, role=role, password_hash=generate_password_hash(password),
-                 password_plain=password, telefono=telefono, email=email)
-        db.session.add(u)
-        db.session.commit()
+        store.create_user(username=username, password_hash=generate_password_hash(password),
+                          password_plain=password, role=role, telefono=telefono, email=email)
         flash("Utente creato con successo.", "success")
         return redirect(url_for("admin_users"))
-
-    users_list = db.session.execute(db.select(User).order_by(User.id.asc())).scalars().all()
+    users_list = sorted(store.get_all_users(), key=lambda u: u.id)
     return render_template("users.html", users=users_list)
 
-# --- DETTAGLIO UTENTE (assegnazione cinema) ---
+
+# --- DETTAGLIO UTENTE ---
 @app.route("/users/<int:user_id>", methods=["GET", "POST"])
 def user_detail(user_id):
     if session.get("role") != "admin":
         return "Accesso negato", 403
-    u = db.session.get(User, user_id)
+    u = store.get_user_by_id(user_id)
     if not u:
         abort(404)
     if request.method == "POST":
-        cinema_ids = request.form.getlist("cinema_ids")
-        UserCinema.query.filter_by(user_id=u.id).delete()
-        for cid in cinema_ids:
-            try:
-                db.session.add(UserCinema(user_id=u.id, cinema_id=int(cid)))
-            except (ValueError, Exception):
-                pass
-        db.session.commit()
+        cinema_ids = [int(x) for x in request.form.getlist("cinema_ids") if x.isdigit()]
+        store.set_user_cinemas(u.id, cinema_ids)
         flash(f"Cinema assegnati a '{u.username}' aggiornati.", "success")
         return redirect(url_for("user_detail", user_id=u.id))
-    all_cinemas = Cinema.query.order_by(Cinema.città.asc(), Cinema.nome.asc()).all()
-    assigned_ids = {uc.cinema_id for uc in UserCinema.query.filter_by(user_id=u.id).all()}
+    all_cinemas  = store.get_all_cinemas(order_by="città_nome")
+    assigned_ids = set(store.get_cinema_ids_for_user(u.id))
     return render_template("user_detail.html", u=u, all_cinemas=all_cinemas, assigned_ids=assigned_ids)
+
 
 # --- RESET PASSWORD ---
 @app.route("/users/<int:user_id>/reset", methods=["POST"])
 def reset_password(user_id):
     if session.get("role") != "admin":
         return "Accesso negato", 403
-
     new_password = request.form.get("new_password", "").strip()
     if len(new_password) < 8:
         flash("La nuova password deve avere almeno 8 caratteri.", "danger")
         return redirect(url_for("admin_users"))
-
-    u = db.session.get(User, user_id)
+    u = store.get_user_by_id(user_id)
     if not u:
         abort(404)
-
-    u.password_hash = generate_password_hash(new_password)
+    u.password_hash  = generate_password_hash(new_password)
     u.password_plain = new_password
-    db.session.commit()
+    store.update_user(u)
     flash(f"Password di '{u.username}' aggiornata con successo.", "success")
     return redirect(url_for("admin_users"))
+
 
 # --- ELIMINA UTENTE ---
 @app.route("/users/<int:user_id>/delete", methods=["POST"])
 def delete_user(user_id):
     if session.get("role") != "admin":
         return "Accesso negato", 403
-
     if session.get("user_id") == user_id:
         flash("Non puoi eliminare il tuo stesso utente mentre sei loggato.", "warning")
         return redirect(url_for("admin_users"))
-
-    u = db.session.get(User, user_id)
+    u = store.get_user_by_id(user_id)
     if not u:
         abort(404)
-
-    if u.role == "admin" and User.query.filter_by(role="admin").count() <= 1:
+    if u.role == "admin" and store.count_admins() <= 1:
         flash("Non puoi eliminare l'unico admin rimasto.", "warning")
         return redirect(url_for("admin_users"))
-
     username = u.username
-    db.session.delete(u)
-    db.session.commit()
+    store.delete_user(user_id)
     flash(f"Utente '{username}' eliminato.", "success")
     return redirect(url_for("admin_users"))
 
-# --- GESTIONE CINEMA (admin) ---
+
+# --- GESTIONE CINEMA ---
 @app.route("/admin/cinemas", methods=["GET", "POST"])
 def admin_cinemas():
     if session.get("role") != "admin":
         return "Accesso negato", 403
     if request.method == "POST":
-        nome = request.form.get("nome", "").strip()
-        città = request.form.get("città", "").strip()
+        nome     = request.form.get("nome", "").strip()
+        città    = request.form.get("città", "").strip()
         telefono = request.form.get("telefono", "").strip()
-        indirizzo = request.form.get("indirizzo", "").strip()
+        indirizzo= request.form.get("indirizzo", "").strip()
         try:
             num_sale = max(1, int(request.form.get("num_sale", "1")))
         except ValueError:
             num_sale = 1
         if nome:
-            db.session.add(Cinema(nome=nome, città=città, num_sale=num_sale,
-                                  telefono=telefono, indirizzo=indirizzo))
-            db.session.commit()
+            store.create_cinema(nome=nome, città=città, num_sale=num_sale,
+                                telefono=telefono, indirizzo=indirizzo)
             flash(f"Cinema '{nome}' ({città}) aggiunto.", "success")
         return redirect(url_for("admin_cinemas"))
-    cinemas = Cinema.query.order_by(Cinema.città.asc(), Cinema.nome.asc()).all()
-    # Ticket aperti raggruppati per nome cinema
+
+    cinemas = store.get_all_cinemas(order_by="città_nome")
     _urgency_order = {"Critico": 0, "Urgente": 1, "Non urgente": 2}
-    open_problems = Problem.query.filter(Problem.stato != "Chiuso").all()
+    open_problems = store.get_problems_filtered(stato_ne="Chiuso")
     open_problems.sort(key=lambda p: _urgency_order.get(p.urgenza, 9))
     tickets_map = {}
     for p in open_problems:
@@ -626,55 +384,51 @@ def admin_cinemas():
             tickets_map.setdefault(key, []).append(p)
     return render_template("cinemas.html", cinemas=cinemas, tickets_map=tickets_map)
 
+
 @app.route("/admin/cinemas/<int:cinema_id>/edit", methods=["GET", "POST"])
 def edit_cinema(cinema_id):
     if session.get("role") != "admin":
         return "Accesso negato", 403
-    c = db.session.get(Cinema, cinema_id)
+    c = store.get_cinema_by_id(cinema_id)
     if not c:
         abort(404)
     if request.method == "POST":
-        nuovo_nome = request.form.get("nome", "").strip()
+        nuovo_nome  = request.form.get("nome", "").strip()
         nuova_città = request.form.get("città", "").strip()
-        num_sale_str = request.form.get("num_sale", "1")
         try:
-            num_sale = max(1, int(num_sale_str))
+            num_sale = max(1, int(request.form.get("num_sale", "1")))
         except ValueError:
             num_sale = 1
-        lat_str = request.form.get("lat", "").strip()
-        lng_str = request.form.get("lng", "").strip()
         try:
-            lat = float(lat_str) if lat_str else None
-            lng = float(lng_str) if lng_str else None
+            lat = float(request.form.get("lat", "").strip()) if request.form.get("lat", "").strip() else None
+            lng = float(request.form.get("lng", "").strip()) if request.form.get("lng", "").strip() else None
         except ValueError:
-            lat = None
-            lng = None
+            lat = lng = None
         if nuovo_nome:
-            c.nome = nuovo_nome
-            c.città = nuova_città
+            c.nome     = nuovo_nome
+            c.città    = nuova_città
             c.num_sale = num_sale
             c.telefono = request.form.get("telefono", "").strip()
-            c.indirizzo = request.form.get("indirizzo", "").strip()
-            c.lat = lat
-            c.lng = lng
-            db.session.commit()
+            c.indirizzo= request.form.get("indirizzo", "").strip()
+            c.lat      = lat
+            c.lng      = lng
+            store.update_cinema(c)
             flash(f"Cinema '{nuovo_nome}' aggiornato.", "success")
         return redirect(url_for("admin_cinemas"))
     return render_template("edit_cinema.html", c=c)
+
 
 @app.route("/admin/cinemas/<int:cinema_id>/delete", methods=["POST"])
 def delete_cinema(cinema_id):
     if session.get("role") != "admin":
         return "Accesso negato", 403
-    c = db.session.get(Cinema, cinema_id)
+    c = store.get_cinema_by_id(cinema_id)
     if c:
         nome = c.nome
-        db.session.delete(c)
-        if not DeletedCinema.query.filter_by(nome=nome).first():
-            db.session.add(DeletedCinema(nome=nome))
-        db.session.commit()
+        store.delete_cinema(cinema_id)
         flash(f"Cinema '{nome}' eliminato.", "success")
     return redirect(url_for("admin_cinemas"))
+
 
 # --- EXPORT EXCEL ---
 @app.route("/export/excel")
@@ -684,10 +438,9 @@ def export_excel():
 
     is_admin = session["role"] == "admin"
     username = session["username"]
-    foglio   = request.args.get("foglio", "tutto")  # aperti | chiusi | cinema | utenti | tutto
+    foglio   = request.args.get("foglio", "tutto")
 
     wb = openpyxl.Workbook()
-
     header_font  = Font(bold=True, color="FFFFFF")
     header_fill  = PatternFill("solid", fgColor="1F2937")
     center_align = Alignment(horizontal="center", vertical="center")
@@ -721,36 +474,34 @@ def export_excel():
 
     if foglio in ("aperti", "tutto"):
         ws = new_sheet("Ticket Aperti")
-        q = Problem.query.filter(Problem.stato != "Chiuso")
-        if not is_admin:
-            q = q.filter_by(autore=username)
+        q = store.get_problems_filtered(stato_ne="Chiuso",
+                                        autore=username if not is_admin else None)
         style_header(ws, ["ID", "Cinema", "Città", "Sala", "Descrizione", "Urgenza", "Stato", "Autore", "Data apertura"])
-        for p in q.order_by(Problem.data_ora.desc()).all():
+        for p in q:
             ws.append([p.id, p.cinema, p.città, p.sala, p.tipo, p.urgenza, p.stato, p.autore, fmt(p.data_ora)])
         autowidth(ws)
 
     if foglio in ("chiusi", "tutto"):
         ws = new_sheet("Archivio Chiusi")
-        q2 = Problem.query.filter_by(stato="Chiuso")
-        if not is_admin:
-            q2 = q2.filter_by(autore=username)
+        q2 = store.get_problems_filtered(stato_eq="Chiuso",
+                                         autore=username if not is_admin else None)
         style_header(ws, ["ID", "Cinema", "Città", "Sala", "Descrizione", "Urgenza", "Autore", "Data apertura", "Chiuso da", "Chiuso il"])
-        for p in q2.order_by(Problem.data_ora.desc()).all():
+        for p in q2:
             ws.append([p.id, p.cinema, p.città, p.sala, p.tipo, p.urgenza, p.autore, fmt(p.data_ora), p.chiuso_da or "", fmt(p.chiuso_il)])
         autowidth(ws)
 
     if foglio in ("cinema", "tutto") and is_admin:
         ws = new_sheet("Cinema")
         style_header(ws, ["ID", "Nome", "Città", "Sale", "Telefono", "Indirizzo", "Lat", "Lng"])
-        for c in Cinema.query.order_by(Cinema.città.asc(), Cinema.nome.asc()).all():
-            ws.append([c.id, c.nome, c.città, c.num_sale, c.telefono or "", c.indirizzo or "", c.lat or "", c.lng or ""])
+        for c in store.get_all_cinemas(order_by="città_nome"):
+            ws.append([c.id, c.nome, c.città, c.num_sale, c.telefono, c.indirizzo, c.lat or "", c.lng or ""])
         autowidth(ws)
 
     if foglio in ("utenti", "tutto") and is_admin:
         ws = new_sheet("Utenti")
         style_header(ws, ["ID", "Username", "Ruolo", "Email", "Telefono"])
-        for u in User.query.order_by(User.id.asc()).all():
-            ws.append([u.id, u.username, u.role, u.email or "", u.telefono or ""])
+        for u in sorted(store.get_all_users(), key=lambda x: x.id):
+            ws.append([u.id, u.username, u.role, u.email, u.telefono])
         autowidth(ws)
 
     buf = io.BytesIO()
@@ -766,6 +517,7 @@ def export_excel():
         download_name=f"sigrafilm_{nomi.get(foglio, foglio)}_{now}.xlsx",
     )
 
+
 # --- IMPORT EXCEL ---
 @app.route("/import/excel", methods=["GET", "POST"])
 def import_excel():
@@ -773,7 +525,6 @@ def import_excel():
         return redirect(url_for("login"))
     if session["role"] != "admin":
         return "Accesso negato", 403
-
     if request.method == "GET":
         return render_template("import_excel.html")
 
@@ -781,131 +532,32 @@ def import_excel():
     if not f or not f.filename.endswith(".xlsx"):
         flash("Carica un file .xlsx valido.", "danger")
         return redirect(url_for("import_excel"))
-
     try:
         wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
     except Exception:
         flash("File non valido o corrotto.", "danger")
         return redirect(url_for("import_excel"))
 
-    added_problems = 0
-    skipped_problems = 0
-    added_cinemas = 0
-    skipped_cinemas = 0
-
-    existing_problem_ids = {p.id for p in Problem.query.with_entities(Problem.id).all()}
-    existing_cinema_nomi = {c.nome for c in Cinema.query.with_entities(Cinema.nome).all()}
-
-    def _val(cell):
-        return cell.value if cell.value is not None else ""
-
-    def _parse_dt(val):
-        if not val:
-            return None
-        if isinstance(val, datetime):
-            return val
-        try:
-            return datetime.strptime(str(val), "%d/%m/%Y %H:%M")
-        except Exception:
-            return None
-
-    # Fogli ticket: "Ticket Aperti" e "Archivio Chiusi"
-    for sheet_name in ["Ticket Aperti", "Archivio Chiusi"]:
-        ws = wb[sheet_name] if sheet_name in wb.sheetnames else None
-        if not ws:
-            continue
-        rows = list(ws.iter_rows(values_only=True))
-        if len(rows) < 2:
-            continue
-        for row in rows[1:]:  # salta header
-            if not any(row):
-                continue
-            try:
-                row_id   = int(row[0]) if row[0] else None
-                cinema   = str(row[1] or "").strip()
-                città    = str(row[2] or "").strip()
-                sala     = str(row[3] or "1").strip()
-                tipo     = str(row[4] or "").strip()
-                urgenza  = str(row[5] or "Non urgente").strip()
-                autore   = str(row[7] or "import").strip()
-                data_ora = _parse_dt(row[8]) if len(row) > 8 else None
-                stato    = str(row[6] or "Aperto").strip() if sheet_name == "Ticket Aperti" else "Chiuso"
-                chiuso_da = str(row[9] or "").strip() if len(row) > 9 else None
-                chiuso_il = _parse_dt(row[10]) if len(row) > 10 else None
-            except Exception:
-                continue
-            if not cinema or not tipo:
-                continue
-            if row_id and row_id in existing_problem_ids:
-                skipped_problems += 1
-                continue
-            p = Problem(
-                cinema=cinema, città=città, sala=sala, tipo=tipo,
-                urgenza=urgenza, stato=stato, autore=autore,
-                data_ora=data_ora or datetime.utcnow(),
-                chiuso_da=chiuso_da or None,
-                chiuso_il=chiuso_il,
-            )
-            db.session.add(p)
-            if row_id:
-                existing_problem_ids.add(row_id)
-            added_problems += 1
-
-    # Foglio "Cinema"
-    if "Cinema" in wb.sheetnames:
-        ws = wb["Cinema"]
-        rows = list(ws.iter_rows(values_only=True))
-        for row in rows[1:]:
-            if not any(row):
-                continue
-            try:
-                nome     = str(row[1] or "").strip()
-                città    = str(row[2] or "").strip()
-                num_sale = int(row[3]) if row[3] else 1
-                telefono = str(row[4] or "").strip()
-                indirizzo= str(row[5] or "").strip()
-                lat      = float(row[6]) if row[6] else None
-                lng      = float(row[7]) if row[7] else None
-            except Exception:
-                continue
-            if not nome:
-                continue
-            if nome in existing_cinema_nomi:
-                skipped_cinemas += 1
-                continue
-            db.session.add(Cinema(nome=nome, città=città, num_sale=num_sale,
-                                  telefono=telefono, indirizzo=indirizzo, lat=lat, lng=lng))
-            existing_cinema_nomi.add(nome)
-            added_cinemas += 1
-
-    db.session.commit()
-
+    counts = store.import_from_workbook(wb)
     parts = []
-    if added_problems:   parts.append(f"{added_problems} ticket aggiunti")
-    if skipped_problems: parts.append(f"{skipped_problems} ticket già presenti (saltati)")
-    if added_cinemas:    parts.append(f"{added_cinemas} cinema aggiunti")
-    if skipped_cinemas:  parts.append(f"{skipped_cinemas} cinema già presenti (saltati)")
+    if counts["added_problems"]:   parts.append(f"{counts['added_problems']} ticket aggiunti")
+    if counts["skipped_problems"]: parts.append(f"{counts['skipped_problems']} ticket già presenti (saltati)")
+    if counts["added_cinemas"]:    parts.append(f"{counts['added_cinemas']} cinema aggiunti")
+    if counts["skipped_cinemas"]:  parts.append(f"{counts['skipped_cinemas']} cinema già presenti (saltati)")
     if not parts:
         flash("Nessuna nuova riga trovata — tutto già presente.", "info")
     else:
         flash(" · ".join(parts) + ".", "success")
-
     return redirect(url_for("import_excel"))
 
-# --- GESTIONE ERRORI ---
-@app.teardown_appcontext
-def _rollback_on_error(exc):
-    if exc is not None:
-        db.session.rollback()
 
+# --- ERRORE 500 ---
 @app.errorhandler(500)
 def _internal_error(e):
-    db.session.rollback()
     flash("Errore temporaneo del server. Riprova.", "warning")
     return redirect(request.referrer or url_for("dashboard"))
 
+
 # --- MAIN ---
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
     app.run(host="0.0.0.0", port=5000, debug=True)

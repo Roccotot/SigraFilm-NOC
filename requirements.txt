@@ -1,6 +1,4 @@
 flask
-flask_sqlalchemy
-psycopg2-binary
 werkzeug
-gunicorn
 openpyxl
+waitress

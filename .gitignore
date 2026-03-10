@@ -7,3 +7,6 @@ __pycache__/
 instance/
 .venv/
 venv/
+
+# File dati Excel (generati localmente al primo avvio)
+data/
