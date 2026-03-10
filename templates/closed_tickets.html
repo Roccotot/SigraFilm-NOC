@@ -12,25 +12,30 @@
 <body>
 
   <!-- Navbar -->
-  <nav class="navbar navbar-expand navbar-dark bg-dark">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
       <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('dashboard') }}">
         <img src="{{ url_for('static', filename='logo_sigra.png') }}" alt="SigraFilm" height="44">
         <span class="nav-user-chip">{{ session.get("username") }}</span>
       </a>
-      <div class="d-flex align-items-center gap-2">
-        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm">🎫 Ticket aperti</a>
-        <a href="{{ url_for('closed_tickets') }}" class="btn btn-outline-light btn-sm">🗄 Archivio</a>
-        {% if session.get("role") == "admin" %}
-          <a href="{{ url_for('admin_cinemas') }}" class="btn btn-outline-light btn-sm">🎬 Cinema</a>
-          <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light btn-sm">👥 Utenti</a>
-        {% endif %}
-        <a href="{{ url_for('export_excel') }}?foglio=chiusi" class="btn btn-outline-success btn-sm">📥 SCARICA EXCEL</a>
-        {% if session.get("role") == "admin" %}
-          <a href="{{ url_for('import_excel') }}" class="btn btn-outline-warning btn-sm">📤 Importa</a>
-        {% endif %}
-        <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm"
-          onclick="return confirm('Sei sicuro di voler uscire?')">🚪 Logout</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu" aria-controls="navMenu" aria-expanded="false" aria-label="Menu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navMenu">
+        <div class="d-flex align-items-center gap-2 ms-auto flex-wrap py-2 py-lg-0">
+          <a href="{{ url_for('dashboard') }}" class="btn btn-outline-light btn-sm">🎫 Ticket aperti</a>
+          <a href="{{ url_for('closed_tickets') }}" class="btn btn-outline-light btn-sm">🗄 Archivio</a>
+          {% if session.get("role") == "admin" %}
+            <a href="{{ url_for('admin_cinemas') }}" class="btn btn-outline-light btn-sm">🎬 Cinema</a>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-light btn-sm">👥 Utenti</a>
+          {% endif %}
+          <a href="{{ url_for('export_excel') }}?foglio=chiusi" class="btn btn-outline-success btn-sm">📥 Scarica Excel</a>
+          {% if session.get("role") == "admin" %}
+            <a href="{{ url_for('import_excel') }}" class="btn btn-outline-warning btn-sm">📤 Importa</a>
+          {% endif %}
+          <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm"
+            onclick="return confirm('Sei sicuro di voler uscire?')">🚪 Logout</a>
+        </div>
       </div>
     </div>
   </nav>
