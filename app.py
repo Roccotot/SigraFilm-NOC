@@ -229,7 +229,7 @@ def download_allegato(cinema_folder, filename):
     if "user_id" not in session:
         return redirect(url_for("login"))
     # Sicurezza: no path traversal
-    safe_cinema = secure_filename(cinema_folder)
+    safe_cinema = _cinema_folder(cinema_folder)
     safe_file   = secure_filename(filename)
     filepath = os.path.join(ALLEGATI_FOLDER, safe_cinema, safe_file)
     if not os.path.isfile(filepath):
@@ -252,7 +252,7 @@ def download_allegato(cinema_folder, filename):
 def delete_allegato(cinema_folder, filename):
     if "user_id" not in session:
         return redirect(url_for("login"))
-    safe_cinema = secure_filename(cinema_folder)
+    safe_cinema = _cinema_folder(cinema_folder)
     safe_file   = secure_filename(filename)
     filepath = os.path.join(ALLEGATI_FOLDER, safe_cinema, safe_file)
     if not os.path.isfile(filepath):
