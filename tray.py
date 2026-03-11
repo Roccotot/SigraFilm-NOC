@@ -2,7 +2,7 @@
 Avvia SigraFilm NOC con icona nel system tray di Windows.
 
 Utilizzo:
-    python tray.py
+    python tray.py   (o rinomina in tray.pyw per nascondere la console)
 
 Dipendenze extra:
     pip install pystray pillow
@@ -11,6 +11,13 @@ import threading
 import webbrowser
 import os
 import sys
+
+# ── Nasconde la finestra console su Windows ──────────────
+if sys.platform == "win32":
+    import ctypes
+    ctypes.windll.user32.ShowWindow(
+        ctypes.windll.kernel32.GetConsoleWindow(), 0  # SW_HIDE = 0
+    )
 
 import pystray
 from PIL import Image, ImageDraw
