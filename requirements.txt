@@ -2,3 +2,5 @@ flask
 werkzeug
 openpyxl
 waitress
+pystray
+pillow
